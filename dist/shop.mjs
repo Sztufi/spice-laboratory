@@ -7,7 +7,8 @@ const icon = (name, size = 20) => {
   const paths = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     close: '<path d="m6 6 12 12M6 18 18 6"/>',
-    bag: '<path d="M6 8h12l2 12H4L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'
+    bag: '<path d="M6 8h12l2 12H4L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    eye: '<path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.7"/>'
   };
   return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 };
@@ -79,6 +80,7 @@ function cardMarkup(product) {
     <button class="product-visual" type="button" data-action="detail" data-id="${escape(product.id)}" aria-label="${escape(product.name)} – termékrészletek" aria-haspopup="dialog">
       <img src="${escape(product.image)}" width="500" height="500" loading="lazy" decoding="async" alt="${escape(product.name)} fűszerkeverék">
       <span class="weight-tag">${product.weightGrams} g</span>
+      <span class="product-peek" aria-hidden="true">${icon('eye')}</span>
     </button>
     <div class="product-info"><p class="product-subtitle">${escape(product.subtitle)}</p>
       <h3 style="margin:0"><button class="product-title" type="button" data-action="detail" data-id="${escape(product.id)}" aria-haspopup="dialog">${escape(product.name)}</button></h3>

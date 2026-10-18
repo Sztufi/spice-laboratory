@@ -100,7 +100,7 @@ test('filter URLs round-trip, reject invalid values and preserve unrelated param
 
 test('the page points to its own catalogue and has no external checkout submission', () => {
   const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
-  assert.ok(html.includes('class="cta" href="#termekek"'));
+  assert.ok(html.includes('<a href="#termekek">FŰSZEREK</a>'));
   assert.ok(html.includes('type="module" src="shop.mjs"'));
   assert.ok(!/<form[^>]+action="https?:/i.test(html));
 });

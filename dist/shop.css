@@ -11,8 +11,6 @@ header{position:sticky;top:0;z-index:20;gap:18px}
 .cart-trigger{display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:8px 12px;border:1.5px solid var(--ink);border-radius:5px;background:transparent;cursor:pointer;font-size:11px;font-weight:700}
 .cart-trigger svg{width:20px;height:20px}
 .cart-count{display:grid;place-items:center;min-width:22px;height:22px;padding:0 4px;background:var(--yellow);border:1px solid var(--ink);border-radius:50%;font-size:10px;letter-spacing:0}
-.flavor-strip{display:flex;align-items:center;justify-content:center;gap:25px;padding:17px 5%;overflow:hidden;background:var(--yellow);border-block:2px solid var(--ink);font-size:10px;font-weight:700;letter-spacing:1.6px;white-space:nowrap}
-.flavor-strip b{font-size:20px;line-height:1}
 .shop{max-width:1440px;margin:auto;padding:80px 5% 90px;scroll-margin-top:20px}
 .shop-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:35px;margin-bottom:30px}
 .section-kicker{display:block;margin-bottom:14px;font-size:10px;letter-spacing:2.5px;font-weight:700}
@@ -42,8 +40,9 @@ header{position:sticky;top:0;z-index:20;gap:18px}
 .product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:34px 22px}
 .product-card{min-width:0;display:flex;flex-direction:column}
 .product-visual{position:relative;display:block;width:100%;aspect-ratio:1;border:1px solid #17130f26;border-radius:8px;overflow:hidden;cursor:pointer;padding:0;background:#ebe6e0}
-.product-visual:after{content:'↗';position:absolute;right:12px;bottom:12px;display:grid;place-items:center;width:31px;height:31px;border:1px solid var(--ink);border-radius:50%;background:var(--cream);font-size:18px;transition:transform .2s}
-.product-visual:hover:after{transform:rotate(-15deg)}
+.product-peek{position:absolute;right:11px;bottom:11px;display:grid;place-items:center;width:36px;height:36px;border:1px solid #17130f26;border-radius:11px;background:#fff9e9f5;color:var(--ink);box-shadow:0 2px 8px #17130f12;transition:background .2s,transform .2s}
+.product-peek svg{width:20px;height:20px}
+.product-visual:hover .product-peek,.product-visual:focus-visible .product-peek{background:var(--yellow);transform:translateY(-2px)}
 .product-visual img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .3s}
 .product-visual:hover img{transform:scale(1.035)}
 .weight-tag{position:absolute;top:11px;left:11px;display:inline-block;min-width:43px;padding:6px 8px;border:1px solid var(--ink);border-radius:30px;background:var(--product-color,var(--yellow));font-size:10px;font-weight:700}
@@ -149,9 +148,7 @@ body.dialog-open{overflow:hidden}
   .site-nav{gap:13px;font-size:10px;letter-spacing:.3px}
   .cart-trigger{gap:7px;padding:7px 9px}
   .cart-label{display:none}
-  .flavor-strip{justify-content:space-between;gap:12px;font-size:8px;letter-spacing:1px;padding:15px 5%}
-  .flavor-strip span:last-child{display:none}
-  .shop{padding:48px 5% 60px}
+      .shop{padding:48px 5% 60px}
   .shop-heading{display:block;margin-bottom:25px}
   .section-kicker{font-size:9px;margin-bottom:12px;letter-spacing:2px}
   .shop h2{font-size:60px}
@@ -173,9 +170,9 @@ body.dialog-open{overflow:hidden}
   .card-ingredients li{font-size:8px;padding:4px 5px}
   .product-price{font-size:15px;margin-bottom:9px}
   .add-button{min-height:45px;font-size:10px;padding:11px}
+  .product-peek{right:9px;bottom:9px;width:34px;height:34px;border-radius:10px}
   .weight-tag{top:8px;left:8px;font-size:9px;min-width:36px;padding:5px 7px}
-  .product-visual:after{width:26px;height:26px;font-size:16px;bottom:8px;right:8px}
-  .store-footer{padding:35px 5%;gap:18px}
+    .store-footer{padding:35px 5%;gap:18px}
   .footer-mark{font-size:25px}
   .footer-links{font-size:9px}
   .dialog-header{padding:21px 20px 16px}

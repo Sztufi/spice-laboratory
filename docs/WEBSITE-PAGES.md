@@ -6,7 +6,7 @@
 
 | Útvonal | Tartalom |
 | --- | --- |
-| `/` | Eredeti animált főoldal, szerverről is megjelenő termékkártyákkal |
+| `/` | Animált főoldal, termékkártyák és az archívumra vezető gomb; kereső, szűrők és rendezés nélkül |
 | `/termekek` | Teljes terméklista, keresés, összetevőszűrés és rendezés |
 | `/kategoriak` | Négy kategória, valódi termékképekkel és darabszámmal |
 | `/kategoria/grill-bbq` | Grill / BBQ, rögzített kategórián belüli szűréssel |
@@ -29,6 +29,9 @@
 
 ## Közös viselkedés
 
+- A fejlécben balra van a menüikon, középen a főoldalra vezető márkajelzés, jobbra a vásárlói műveletek. A mobilmenü balról nyílik; a nyitógomb jelzi a nyitott állapotot is.
+- A főmenü és a lábléc egyetlen „Termékek” hivatkozása a `/termekek` archívumra vezet. A kategóriák ott szűrőként választhatók, a keresővel, az összetevőkkel és a rendezéssel együtt. A korábbi kategóriaútvonalak továbbra is működnek.
+- A főoldal nem tartalmaz szűrőpanelt vagy keresővezérlőket, és a termékkártyáit a szűrési URL-paraméterek sem szűkítik. A kedvencekre és a gyorsnézet összetevőire indított szűrés az archívumra vezet.
 - Mobilmenü natív dialoggal; a kosár és a kedvencek a felső sorban maradnak. Mobilon a fiók a menüből is elérhető, így a fejléc nem zsúfolódik túl.
 - Minden oldalon ugyanaz a kosár-, kedvenc-, fiók- és pénztármodul működik.
 - Az információs oldalak nem tartalmaznak elrejtett, ismétlődő termékkatalógust.

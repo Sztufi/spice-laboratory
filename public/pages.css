@@ -4,3 +4,26 @@
 @media(max-width:600px){header{gap:8px}.site-nav{gap:4px}.site-nav>.nav-catalogue{display:none!important}.site-nav>#open-account{display:none}.site-nav .nav-icon{width:44px;height:44px;padding:10px}.site-nav .cart-trigger{padding:7px 9px}.brand{font-size:22px}.page-footer{padding-inline:5%}}
 @media(prefers-reduced-motion:reduce){.category-tile-art img{transition:none}.category-tile:hover img{transform:none}}
 .site-nav>a[aria-current=page]{text-decoration:underline;text-decoration-color:var(--pink);text-decoration-thickness:2px;text-underline-offset:7px}
+
+.site-header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:24px}
+.header-start{display:flex;align-items:center;gap:18px;min-width:0;justify-self:start}
+.site-header .menu-trigger{width:44px;height:44px;flex:none}
+.site-header .brand{justify-self:center;text-align:center;transform:none;white-space:nowrap}
+.site-primary-nav{display:flex;align-items:center;gap:22px;font-size:11px;letter-spacing:.7px}
+.site-primary-nav a{display:flex;align-items:center;min-height:44px;padding:12px 0;color:var(--ink);text-decoration:none;white-space:nowrap}
+.site-primary-nav a[aria-current=page]{text-decoration:underline;text-decoration-color:var(--pink);text-decoration-thickness:2px;text-underline-offset:7px}
+.header-actions{justify-self:end;gap:12px}
+.menu-dialog{margin:0 auto 0 0;border-left:0;border-right:1px solid var(--ink)}
+.home-catalogue-link{display:flex;justify-content:center;margin-top:28px}
+.home-catalogue-link .secondary-button{min-height:48px;padding:12px 24px}
+@media(max-width:1100px){.site-primary-nav{display:none}.header-start{gap:0}}
+@media(max-width:800px){.site-header{column-gap:8px}.header-actions{gap:6px}}
+@media(max-width:600px){
+ .site-header .brand{font-size:clamp(18px,5.4vw,22px)}
+ .header-actions{gap:4px}
+ .header-actions .cart-trigger{position:relative;width:44px;height:44px;min-height:44px;padding:10px;gap:0;border:0;border-radius:50%}
+ .header-actions .cart-trigger:hover{background:#17130f0c}
+ .header-actions .cart-trigger svg{width:22px;height:22px}
+ .header-actions .cart-count{position:absolute;right:1px;top:1px;min-width:17px;height:17px;padding:1px 3px;border:0;font-size:9px;line-height:15px}
+ .home-catalogue-link .secondary-button{width:100%}
+}

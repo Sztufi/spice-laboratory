@@ -101,7 +101,7 @@ export async function initAccount(){
   const favorite=event.target.closest('[data-favorite]');if(favorite){await toggleFavorite(favorite.dataset.favorite);return;}
   const tab=event.target.closest('[data-account-tab]');if(tab){activeTab=tab.dataset.accountTab;hideNotice();renderAccount();return;}
   if(event.target.closest('#copy-address'))for(const field of ['recipient','country','postalCode','city','line1','line2'])$(`#billing-${field}`).value=$(`#shipping-${field}`).value;
-  if(event.target.closest('#show-favorite-products')){if(!$('#termekek')){location.assign('/termekek?favorites=1');return;}favoriteOnly=true;emit();$('#account-dialog').close();$('#termekek').scrollIntoView({block:'start'});}
+  if(event.target.closest('#show-favorite-products')){if(!$('.listing-shop')){location.assign('/termekek?favorites=1');return;}favoriteOnly=true;emit();$('#account-dialog').close();$('#termekek').scrollIntoView({block:'start'});}
   if(event.target.closest('#retry-account')){status='loading';renderAccount();await loadAccount();renderAccount();}
   if(event.target.closest('[data-open-orders]'))openAccount('orders');
  });

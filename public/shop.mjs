@@ -24,8 +24,9 @@ const ingredientsById = new Map(catalogue.ingredients.map(item => [item.id, item
 const productsById = new Map(catalogue.products.map(product => [product.id, product]));
 const label = id => ingredientsById.get(id)?.label || id;
 const CART_KEY = 'spice-lab-unalmas-kaja:demo-cart:v1';
+const isProductArchive=Boolean($('.listing-shop'));
 const pageCategory=document.body.dataset.pageCategory||'';
-let filters = readFilters(location.search, catalogue);
+let filters = readFilters(isProductArchive?location.search:'', catalogue);
 if(pageCategory)filters.category=pageCategory;
 let cart = [];
 let cartView = 'cart';
@@ -63,6 +64,7 @@ function openDialog(id) {
     if (dialog.id !== id) dialog.close();
   }
   const dialog = document.getElementById(id);
+  if (!dialog) return;
   if (!dialog.open) dialog.showModal();
   document.body.classList.add('dialog-open');
 }
@@ -89,8 +91,9 @@ function renderCatalogue(updateHistory = true) {
   if(!$('#product-grid'))return;
   const focusedCategory = document.activeElement?.dataset.category;
   let results = filterProducts(catalogue.products, filters, catalogue.ingredients);
-  if (favoritesFilterEnabled()) results = results.filter(product => isFavorite(product.id));
+  if (isProductArchive && favoritesFilterEnabled()) results = results.filter(product => isFavorite(product.id));
   $('#product-grid').innerHTML = results.map(cardMarkup).join('');
+  if(!isProductArchive)return;
   const available=pageCategory?catalogue.products.filter(product=>product.categories.includes(pageCategory)).length:catalogue.products.length;
   $('#product-count').textContent = `${results.length} / ${available} fűszerkeverék`;
   $('#empty-results').hidden = results.length > 0;
@@ -114,6 +117,7 @@ function renderCatalogue(updateHistory = true) {
 }
 
 function renderIngredientOptions() {
+  if(!$('#ingredient-search'))return;
   const focused = document.activeElement?.dataset.ingredient;
   const query = normalize($('#ingredient-search').value);
   const facets = ingredientFacets(catalogue.products, filters, catalogue.ingredients).filter(item => normalize(item.label).includes(query));
@@ -251,7 +255,7 @@ document.addEventListener('click', event => {
   }
   const filterIngredient = event.target.closest('[data-filter-ingredient]');
   if (filterIngredient) {
-    if(!$('#product-grid')){location.assign('/termekek?ingredient='+encodeURIComponent(filterIngredient.dataset.filterIngredient));return;}
+    if(!isProductArchive){location.assign('/termekek?ingredient='+encodeURIComponent(filterIngredient.dataset.filterIngredient));return;}
     filters = { ...filters, category: pageCategory, query: '', ingredients: [filterIngredient.dataset.filterIngredient], match: 'all' };
     $('#product-search').value = '';
     $('#product-dialog').close();
@@ -312,22 +316,22 @@ document.addEventListener('submit', event => {
 
 $('#product-search')?.addEventListener('input', event => { filters.query = event.target.value; renderCatalogue(); });
 $('#sort-products')?.addEventListener('change', event => { filters.sort = event.target.value; renderCatalogue(); });
-$('#ingredient-search').addEventListener('input', renderIngredientOptions);
+$('#ingredient-search')?.addEventListener('input', renderIngredientOptions);
 $('#open-filters')?.addEventListener('click', () => { renderIngredientOptions(); openDialog('filter-dialog'); });
-$('#apply-filters').addEventListener('click', () => $('#filter-dialog').close());
-$('#clear-ingredients').addEventListener('click', () => { filters.ingredients = []; renderCatalogue(); renderIngredientOptions(); });
+$('#apply-filters')?.addEventListener('click', () => $('#filter-dialog').close());
+$('#clear-ingredients')?.addEventListener('click', () => { filters.ingredients = []; renderCatalogue(); renderIngredientOptions(); });
 $('#reset-filters')?.addEventListener('click', resetFilters);
 $('#reset-empty')?.addEventListener('click', resetFilters);
 $('#open-cart').addEventListener('click', showCart);
 $('#toast-cart').addEventListener('click', showCart);
 
 window.addEventListener('popstate', () => {
-  filters = readFilters(location.search, catalogue);
+  filters = readFilters(isProductArchive?location.search:'', catalogue);
   if(pageCategory)filters.category=pageCategory;
   if($('#product-search'))$('#product-search').value = filters.query;
   if($('#sort-products'))$('#sort-products').value = filters.sort;
   renderCatalogue(false);
-  if ($('#filter-dialog').open) renderIngredientOptions();
+  if ($('#filter-dialog')?.open) renderIngredientOptions();
 });
 window.addEventListener('storage', event => {
   if (event.key !== CART_KEY && event.key !== null) return;

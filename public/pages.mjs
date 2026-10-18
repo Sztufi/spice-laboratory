@@ -7,7 +7,12 @@ function paintFavorites(){
   if(product)button.outerHTML=favoriteButtonMarkup(product);
  }
 }
-document.querySelector('#open-menu')?.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('spice:open-dialog',{detail:'menu-dialog'})));
+const menuButton=document.querySelector('#open-menu');
+menuButton?.addEventListener('click',()=>{
+ window.dispatchEvent(new CustomEvent('spice:open-dialog',{detail:'menu-dialog'}));
+ menuButton.setAttribute('aria-expanded','true');
+});
+document.querySelector('#menu-dialog')?.addEventListener('close',()=>menuButton?.setAttribute('aria-expanded','false'));
 document.addEventListener('click',event=>{const button=event.target.closest('[data-open-account-tab]');if(button)openAccount(button.dataset.openAccountTab);});
 window.addEventListener('spice:favorites-change',paintFavorites);
 paintFavorites();

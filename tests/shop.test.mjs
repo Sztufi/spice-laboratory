@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { catalogue } from '../dist/catalogue.mjs';
-import { filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from '../dist/shop-core.mjs';
+import { catalogue } from '../public/catalogue.mjs';
+import { filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from '../public/shop-core.mjs';
 
 const { products, ingredients } = catalogue;
 const select = options => filterProducts(products, options, ingredients).map(product => product.id);
@@ -17,7 +17,7 @@ test('all ten verified products have separately structured ingredients and local
     assert.deepEqual(product.ingredients.map(item => item.sourceLabel), original);
     assert.ok(product.ingredients.every(item => known.has(item.id)));
     assert.equal(new Set(product.ingredients.map(item => item.id)).size, product.ingredients.length);
-    assert.ok(existsSync(new URL(`../dist/${product.image}`, import.meta.url)));
+    assert.ok(existsSync(new URL(`../public/${product.image}`, import.meta.url)));
     assert.ok(Number.isSafeInteger(product.priceMinor) && product.priceMinor > 0);
     assert.equal(new URL(product.sourceUrl).hostname, 'spicelaboratory.ro');
   }
@@ -99,8 +99,8 @@ test('filter URLs round-trip, reject invalid values and preserve unrelated param
 });
 
 test('the page points to its own catalogue and has no external checkout submission', () => {
-  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
-  assert.ok(html.includes('<a href="#termekek">FŰSZEREK</a>'));
+  const html = readFileSync(new URL('../storefront/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('href="#termekek">FŰSZEREK</a>'));
   assert.ok(html.includes('type="module" src="shop.mjs"'));
   assert.ok(!/<form[^>]+action="https?:/i.test(html));
 });

@@ -1,3 +1,4 @@
+import { initAccount, isFavorite, favoritesFilterEnabled, favoriteProductIds, favoriteButtonMarkup, clearFavoritesFilter, archiveDemoOrder } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
 import { MAX_QUANTITY, normalize, filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from './shop-core.mjs';
 
@@ -40,9 +41,10 @@ function hideToast() {
   $('#cart-toast').hidden = true;
 }
 
-function toast(message) {
+function toast(message, showCart = true) {
   hideToast();
   $('#toast-message').textContent = message;
+  $('#toast-cart').hidden = !showCart;
   $('#cart-toast').hidden = false;
   toastTimer = setTimeout(hideToast, 5000);
 }
@@ -77,11 +79,11 @@ function cardMarkup(product) {
   const featured = product.ingredients.filter(item => !['sea-salt', 'cane-sugar', 'brown-sugar', 'raw-sugar', 'rapeseed-oil'].includes(item.id)).slice(0, 2);
   const rest = product.ingredients.length - featured.length;
   return `<article class="product-card" style="--product-color:${escape(product.color)}">
-    <button class="product-visual" type="button" data-action="detail" data-id="${escape(product.id)}" aria-label="${escape(product.name)} – termékrészletek" aria-haspopup="dialog">
+    <div class="product-media"><button class="product-visual" type="button" data-action="detail" data-id="${escape(product.id)}" aria-label="${escape(product.name)} – termékrészletek" aria-haspopup="dialog">
       <img src="${escape(product.image)}" width="500" height="500" loading="lazy" decoding="async" alt="${escape(product.name)} fűszerkeverék">
       <span class="weight-tag">${product.weightGrams} g</span>
       <span class="product-peek" aria-hidden="true">${icon('eye')}</span>
-    </button>
+    </button>${favoriteButtonMarkup(product)}</div>
     <div class="product-info"><p class="product-subtitle">${escape(product.subtitle)}</p>
       <h3 style="margin:0"><button class="product-title" type="button" data-action="detail" data-id="${escape(product.id)}" aria-haspopup="dialog">${escape(product.name)}</button></h3>
       <ul class="card-ingredients" aria-label="Néhány összetevő">${featured.map(item => `<li>${escape(label(item.id))}</li>`).join('')}<li aria-label="További ${rest} összetevő">+${rest}</li></ul>
@@ -92,11 +94,12 @@ function cardMarkup(product) {
 
 function renderCatalogue(updateHistory = true) {
   const focusedCategory = document.activeElement?.dataset.category;
-  const results = filterProducts(catalogue.products, filters, catalogue.ingredients);
+  let results = filterProducts(catalogue.products, filters, catalogue.ingredients);
+  if (favoritesFilterEnabled()) results = results.filter(product => isFavorite(product.id));
   $('#product-grid').innerHTML = results.map(cardMarkup).join('');
   $('#product-count').textContent = `${results.length} / ${catalogue.products.length} fűszerkeverék`;
   $('#empty-results').hidden = results.length > 0;
-  $('#reset-filters').hidden = !filters.query && !filters.category && !filters.ingredients.length;
+  $('#reset-filters').hidden = !filters.query && !filters.category && !filters.ingredients.length && !favoritesFilterEnabled();
   $('#categories').innerHTML = [{ id: '', label: 'Mind a 10' }, ...catalogue.categories].map(category =>
     `<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
   ).join('');
@@ -104,7 +107,8 @@ function renderCatalogue(updateHistory = true) {
   $('#active-filters').innerHTML = filters.ingredients.map(id =>
     `<button class="active-filter" type="button" data-remove-ingredient="${escape(id)}" aria-label="${escape(label(id))} szűrő törlése">${escape(label(id))}${icon('close', 12)}</button>`
   ).join('');
-  $('#active-filters').hidden = !filters.ingredients.length;
+  if (favoritesFilterEnabled()) $('#active-filters').insertAdjacentHTML('beforeend', '<button class="favorite-filter-reset" type="button" id="clear-favorites-filter">Csak kedvencek ×</button>');
+  $('#active-filters').hidden = !filters.ingredients.length && !favoritesFilterEnabled();
   $('#filter-count').textContent = filters.ingredients.length;
   $('#filter-count').hidden = !filters.ingredients.length;
   $('#selected-count').textContent = `${filters.ingredients.length} kiválasztva`;
@@ -130,6 +134,7 @@ function resetFilters() {
   $('#product-search').value = '';
   $('#sort-products').value = 'default';
   $('#ingredient-search').value = '';
+  clearFavoritesFilter();
   renderCatalogue();
   renderIngredientOptions();
 }
@@ -163,12 +168,14 @@ function addToCart(id) {
   const previous = cart.find(item => item.id === id)?.quantity || 0;
   if (previous >= MAX_QUANTITY) {
     if ($('#product-dialog').open) $('#product-dialog').close();
+    if ($('#account-dialog').open) $('#account-dialog').close();
     toast(`A demóban legfeljebb ${MAX_QUANTITY} db választható termékenként.`);
     return;
   }
   cart = setQuantity(cart, id, previous + 1, catalogue.products);
   persistCart();
   if ($('#product-dialog').open) $('#product-dialog').close();
+    if ($('#account-dialog').open) $('#account-dialog').close();
   toast(`${product.name} a kosaradban.`);
 }
 
@@ -218,21 +225,34 @@ function showCheckout() {
   $('#cart-content').scrollTop = 0;
 }
 
-function completeDemoOrder(event) {
+async function completeDemoOrder(event) {
   event.preventDefault();
   const { count, totalMinor } = cartTotals(cart, catalogue.products);
   if (!count) { renderCart(); return; }
+  const submit = document.querySelector('[form="checkout-form"]');
+  if (submit?.disabled) return;
+  if (submit) submit.disabled = true;
+  let archived;
+  try { archived = await archiveDemoOrder(cart); }
+  catch (error) {
+    if (submit) submit.disabled = false;
+    $('#cart-content .checkout-error')?.remove();
+    const message = document.createElement('p'); message.className = 'checkout-error'; message.setAttribute('role','alert'); message.textContent = error.message || 'Nem sikerült az archívumba menteni. A kosarad megmaradt.';
+    $('#cart-content').prepend(message); $('#cart-content').scrollTop = 0;
+    return;
+  }
   cart = [];
   persistCart();
   cartView = 'confirmation';
   $('#cart-title').textContent = 'PRÓBA TELJESÍTVE';
-  $('#cart-content').innerHTML = `<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>EZ MÁR<br>JÓL KEVEREDIK.</h3><p>A próbavásárlás sikerült.<br>Nem történt fizetés, és nem adtunk le valódi rendelést.</p><div class="confirmation-total">${count} termék · ${money(totalMinor)}</div><p>A kosarad kiürült. Kipróbálhatsz egy új összeállítást is.</p><button class="primary-button" type="button" data-action="continue">VISSZA A FŰSZEREKHEZ ↗</button></div>`;
+  $('#cart-content').innerHTML = `<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>EZ MÁR<br>JÓL KEVEREDIK.</h3><p>A próbavásárlás sikerült.<br>Nem történt fizetés, és nem adtunk le valódi rendelést.</p><div class="confirmation-total">${count} termék · ${money(totalMinor)}</div><p>${archived?.saved ? 'A próbavásárlást megtalálod a fiókod rendelései között.' : 'A kosarad kiürült. Kipróbálhatsz egy új összeállítást is.'}</p>${archived?.saved ? '<button class="text-button" type="button" data-open-orders>Próbavásárlás megtekintése →</button>' : ''}<button class="primary-button" type="button" data-action="continue">VISSZA A FŰSZEREKHEZ ↗</button></div>`;
   $('#cart-footer').hidden = true;
   $('#cart-content').scrollTop = 0;
   $('#cart-content [data-action="continue"]').focus({ preventScroll: true });
 }
 
 document.addEventListener('click', event => {
+  if (event.target.closest('#clear-favorites-filter')) { clearFavoritesFilter(); return; }
   const close = event.target.closest('[data-close]');
   if (close) { document.getElementById(close.dataset.close)?.close(); return; }
   const category = event.target.closest('[data-category]');
@@ -331,3 +351,8 @@ $('#product-search').value = filters.query;
 $('#sort-products').value = filters.sort;
 renderCatalogue(false);
 renderCartBadge();
+
+window.addEventListener('spice:favorites-change', () => renderCatalogue(false));
+window.addEventListener('spice:open-dialog', event => openDialog(event.detail));
+window.addEventListener('spice:notice', event => toast(event.detail, false));
+initAccount().catch(() => {});

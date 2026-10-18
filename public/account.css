@@ -1,0 +1,75 @@
+.nav-icon{position:relative;display:grid;place-items:center;flex:none;width:44px;height:44px;padding:10px;border:0;border-radius:50%;background:transparent;cursor:pointer}
+.nav-icon svg{width:22px;height:22px}
+.nav-icon:hover{background:#17130f0c}
+.nav-badge{position:absolute;right:1px;top:1px;min-width:17px;height:17px;padding:1px 3px;border-radius:50%;background:var(--pink);font-size:9px;font-weight:700;line-height:15px}
+.product-card{padding:0 0 14px;border:0;border-bottom:1px solid #17130f29;border-radius:0;background:transparent}
+.product-media{position:relative;min-width:0;align-self:start}
+.product-visual{aspect-ratio:4/5;border-radius:7px}
+.product-peek{width:29px;height:29px;right:8px;bottom:8px;border:0;border-radius:50%;box-shadow:none;background:#fff9e9d9}
+.product-peek svg{width:18px;height:18px}
+.favorite-button{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:40px;height:40px;padding:9px;border:0;border-radius:50%;background:#fff9e9ed;color:var(--ink);cursor:pointer;transition:background .2s}
+.favorite-button svg{width:21px;height:21px}
+.favorite-button:hover{background:#f9c1d8}
+.favorite-button.is-favorite svg{fill:var(--pink)}
+.favorite-filter-reset{min-height:34px;padding:7px 10px;border:1px solid var(--ink);border-radius:4px;background:#f6d6e5;font-size:10px;cursor:pointer}
+.account-dialog{width:min(100%,560px)}
+.account-dialog .dialog-header{padding-bottom:16px}
+.account-identity{font-size:10px;margin:8px 0 0;color:#716558;overflow-wrap:anywhere}
+.account-tabs{display:flex;flex:none;gap:4px;padding:10px 20px 0;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid #17130f26}
+.account-tabs button{min-height:44px;padding:10px 11px;border:0;border-bottom:2px solid transparent;background:transparent;white-space:nowrap;font-size:10px;font-weight:700;cursor:pointer}
+.account-tabs button[aria-selected=true]{border-bottom-color:var(--ink)}
+.account-panel{padding-bottom:20px}
+.account-description,.account-welcome p{font-size:12px;line-height:1.8;margin:0 0 22px;color:#5c5349}
+.account-kicker{display:block;font-size:9px;letter-spacing:2px;font-weight:700;margin:0 0 16px}
+.account-welcome h3,.account-empty h3{font-family:'Barlow Condensed',Impact,sans-serif;font-size:42px;line-height:1;letter-spacing:-.6px;margin:0 0 20px}
+.account-provider{margin-top:30px;padding-top:20px;border-top:1px solid #17130f26;font-size:12px}
+.account-provider p{font-size:10px;margin:14px 0 0}
+.status-pill{display:inline-block;padding:4px 7px;border-radius:4px;background:#eee7d6;font-size:9px;font-weight:600}
+.account-provider .status-pill{margin-left:10px}
+.account-form label{display:block;font-size:10px;font-weight:700;margin-bottom:17px}
+.account-form input{display:block;width:100%;min-height:46px;margin-top:7px;padding:12px;border:1px solid #17130f45;border-radius:5px;background:#fffdf6;color:var(--ink);font-size:13px}
+.account-form input[readonly]{background:#eee7d6;color:#5c5349}
+.account-help{font-size:10px;line-height:1.8;color:#6c6256;margin:0 0 22px}
+.address-fieldset{padding:0;margin:0 0 26px;border:0}
+.address-fieldset legend,.account-settings h3{font-family:'Barlow Condensed',Impact,sans-serif;font-size:25px;font-weight:800;margin-bottom:18px}
+#copy-address{margin:0 0 26px;font-size:10px}
+.account-favorite{display:grid;grid-template-columns:88px minmax(0,1fr) 36px;gap:13px;align-items:center;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid #17130f26}
+.account-favorite-photo{padding:0;border:0;background:#ebe6e0;border-radius:6px;overflow:hidden;cursor:pointer}
+.account-favorite-photo img{display:block;width:88px;height:110px;object-fit:cover}
+.account-favorite h3{font-family:'Barlow Condensed',Impact,sans-serif;font-size:28px;line-height:1.05;margin:0 0 8px}
+.account-favorite p{font-size:12px;margin:0 0 7px;font-weight:700}
+.favorite-remove{display:grid;place-items:center;width:36px;height:44px;padding:7px;border:0;background:transparent;cursor:pointer}
+.favorite-remove svg{width:21px;height:21px;fill:var(--pink)}
+.account-empty{padding:25px 0}
+.account-empty h3{font-size:34px}
+.account-empty p{font-size:12px;line-height:1.8;color:#5c5349}
+.order-record{padding:17px 0;border-block-end:1px solid #17130f26;font-size:12px}
+.order-record summary{display:flex;justify-content:space-between;gap:15px;cursor:pointer;list-style:none}
+.order-record summary>span:last-child{text-align:right}
+.order-record small{display:block;font-size:10px;margin-top:8px;color:#6c6256}
+.order-record .status-pill{display:inline-block}
+.order-record ul{list-style:none;margin:18px 0 0;padding:14px 0 0;border-top:1px solid #17130f15}
+.order-record li{display:flex;justify-content:space-between;gap:15px;margin-bottom:12px;font-size:11px}
+.order-record li strong{white-space:nowrap}
+.invoice-record{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid #17130f26}
+.invoice-record h3{font-size:14px;margin:0 0 10px}
+.invoice-record p{font-size:11px;margin:0}
+.account-settings h3{margin:28px 0 14px}
+.account-settings h3:first-child{margin-top:0}
+.account-settings p{font-size:11px;line-height:1.8;color:#5c5349;margin:0 0 16px}
+.deletion-consent{display:flex;align-items:center;gap:10px;font-size:11px;line-height:1.6;margin:0 0 18px}
+.account-notice{padding:13px 16px;margin:0 20px 18px;border-radius:5px;background:#dfeacb;font-size:11px;line-height:1.7;flex:none}
+.account-notice.is-error{background:#f7d4cf}
+.account-saved{padding:14px;background:#dfeacb;border-radius:5px}
+.checkout-error{padding:11px;margin:0 0 14px;background:#f7d4cf;border-radius:4px;font-size:11px;line-height:1.6}
+@media(max-width:800px){
+ .site-nav{gap:6px}
+ .nav-catalogue{display:none}
+ .product-card{padding:0 0 12px;border-radius:0}
+ .account-tabs{padding-inline:12px}
+ .account-favorite{grid-template-columns:78px minmax(0,1fr) 34px;gap:11px}
+ .account-favorite-photo img{width:78px;height:98px}
+ .account-favorite h3{font-size:25px}
+ .account-form input{font-size:16px}
+}
+@media(max-width:360px){.product-card{padding:0 0 12px}.favorite-button{top:4px;right:4px;width:38px;height:38px}.nav-icon{width:40px;padding:9px}.site-nav{gap:4px}}

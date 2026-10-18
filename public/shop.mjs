@@ -1,3 +1,4 @@
+import { formatMoney } from './money.mjs';
 import { getCommerceConfig, startStripeCheckout, initCommerce } from './commerce.mjs';
 import { initAccount, isFavorite, favoritesFilterEnabled, favoriteProductIds, favoriteButtonMarkup, clearFavoritesFilter, archiveDemoOrder } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
@@ -14,7 +15,7 @@ const icon = (name, size = 20) => {
   };
   return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 };
-const money = minor => `${new Intl.NumberFormat('hu-HU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100)} lej`;
+const money = minor => formatMoney(minor, catalogue.currency);
 const ingredientsById = new Map(catalogue.ingredients.map(item => [item.id, item]));
 const productsById = new Map(catalogue.products.map(product => [product.id, product]));
 const label = id => ingredientsById.get(id)?.label || id;

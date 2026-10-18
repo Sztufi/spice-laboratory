@@ -83,8 +83,8 @@ test('cart quantity changes, removals and limits are consistent', () => {
 test('totals use integer catalogue prices instead of untrusted stored prices', () => {
   const result = cartTotals([{ id: 'fries-salt', quantity: 2, priceMinor: 1 }, { id: 'bulls-blaze', quantity: 1 }], products);
   assert.equal(result.count, 3);
-  assert.equal(result.totalMinor, 11700);
-  assert.equal(result.lines[0].subtotalMinor, 7800);
+  assert.equal(result.totalMinor, 825000);
+  assert.equal(result.lines[0].subtotalMinor, 550000);
   assert.equal(cartTotals([], products).totalMinor, 0);
 });
 
@@ -103,4 +103,12 @@ test('the page loads its local storefront module without submitting HTML forms t
   assert.ok(html.includes('href="#termekek">FŰSZEREK</a>'));
   assert.ok(html.includes('type="module" src="shop.mjs"'));
   assert.ok(!/<form[^>]+action="https?:/i.test(html));
+});
+
+
+test('HUF display matches the merchant price and preserves historical RON values',async()=>{
+  const {formatMoney}=await import('../public/money.mjs');
+  assert.equal(formatMoney(275000,'HUF').replace(/\s/g,''),'2750Ft');
+  assert.match(formatMoney(3900,'RON'),/39,00/);
+  assert.ok(catalogue.products.every(product=>product.currency==='HUF'&&product.priceMinor===275000));
 });

@@ -1,3 +1,4 @@
+import { formatMoney } from './money.mjs';
 import { catalogue } from './catalogue.mjs';
 const $=selector=>document.querySelector(selector);
 const h=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -9,7 +10,7 @@ let initialGuest=[];
 const pending=new Set();
 try{const stored=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]');if(Array.isArray(stored))initialGuest=[...new Set(stored.filter(id=>products.has(id)))];}catch{}
 favorites=new Set(initialGuest);
-const money=(minor,currency='RON')=>`${new Intl.NumberFormat('hu-HU',{minimumFractionDigits:2,maximumFractionDigits:2}).format(minor/100)} ${currency==='RON'?'lej':currency}`;
+const money=(minor,currency=catalogue.currency)=>formatMoney(minor,currency);
 const date=value=>new Intl.DateTimeFormat('hu-HU',{dateStyle:'medium'}).format(new Date(value));
 export const isFavorite=id=>favorites.has(id);
 export const favoritesFilterEnabled=()=>favoriteOnly;

@@ -59,8 +59,8 @@ test('demo orders use server prices, preserve snapshots, remain private and dedu
  const body={requestId,items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1,userId:bob.userId};
  assert.equal((await call(db,alice,'/demo-orders','POST',body)).status,201);
  assert.equal((await call(db,alice,'/demo-orders','POST',body)).status,200);
- const account=await data(db,alice);assert.equal(account.orders.length,1);assert.equal(account.orders[0].kind,'demo');
- assert.equal(account.orders[0].totalMinor,7800);assert.equal(account.orders[0].items[0].priceMinor,3900);
+ const account=await data(db,alice);assert.equal(account.orders.length,1);assert.equal(account.orders[0].currency,'HUF');assert.equal(account.orders[0].kind,'demo');
+ assert.equal(account.orders[0].totalMinor,550000);assert.equal(account.orders[0].items[0].priceMinor,275000);
  assert.deepEqual((await data(db,bob)).orders,[]);
  assert.equal((await call(db,alice,'/demo-orders','POST',{requestId:crypto.randomUUID(),items:[]})).status,400);
  assert.deepEqual(account.invoices,[]);

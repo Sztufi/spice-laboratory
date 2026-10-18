@@ -6,7 +6,7 @@ Ellenőrizve: 2026-10-18. A kód elkészült, a szolgáltatói fiókok és kulcs
 
 - A meglévő mobilfelület és próbapénztár megmarad, amíg a Stripe nincs bekapcsolva.
 - Aktiválás után a kosár összesítője a beállított szállítást is mutatja. A bejelentkezett vásárló a Stripe hosztolt fizetési oldalára kerül, ott adja meg a kártya-, számlázási és szállítási adatokat. Kártyaadatot ez az oldal nem kér és nem tárol.
-- Az első verzió RON pénznemmel, Románián belüli szállítással, egyszeri kártyás fizetéssel működik. A tesztmódot mindenhol külön jelöljük.
+- Az első verzió HUF pénznemmel, Románián belüli szállítással, egyszeri kártyás fizetéssel működik. A tesztmódot mindenhol külön jelöljük.
 - Az árakat és a mennyiségeket a szerver ellenőrzi. A kliens nem adhat meg kedvezményt, árat vagy rendeléstulajdonost.
 - A visszatérési URL nem bizonyíték a fizetésre. Szerveroldali Stripe Session-lekérés és/vagy aláírás-ellenőrzött webhook szükséges. Az összeg, pénznem, Session, mód és belső rendelésazonosító egyezését is ellenőrizzük.
 - Ugyanaz a kérés ugyanazt a Stripe idempotency key-t használja; a DB-ben is egyedi a kérés és a Session. Régi bizonytalan fizetési kísérletet nem küldünk újra a Stripe kulcsmegőrzési idején túl.
@@ -24,7 +24,7 @@ A következő értékeket a tárhely környezeti beállításaiban kell kezelni,
 | `STRIPE_MODE` | `test` az első teljes körű teszthez; csak utána `live` |
 | `STRIPE_ENABLED` | `true` a fizetés engedélyezéséhez |
 | `STRIPE_WEBHOOK_READY` | Csak a valóban elérhető, ellenőrzött webhook után `true` |
-| `SHIPPING_RON_MINOR` | Kereskedő által meghatározott romániai szállítási díj bani egységben; explicit `0` is lehet |
+| `SHIPPING_HUF_MINOR` | Kereskedő által meghatározott romániai szállítási díj a Stripe századforintos egységében (1 Ft = 100 egység); explicit `0` is lehet |
 | `MERCHANT_PRICES_APPROVED` | Csak ellenőrzött katalógusárak, adókezelés és szállítás után `true` |
 | `OMNISEND_API_KEY` | Omnisend szerveroldali API-kulcs, `contacts.write`; eseményküldéshez `events.write` is |
 | `OMNISEND_ENABLED` | `true` a hozzájárulásos fel- és leiratkozás engedélyezéséhez |
@@ -44,7 +44,7 @@ A szerver `POST https://api.omnisend.com/api/contacts` kéréssel, `Omnisend-Ver
 
 A levelekben történő leiratkozás Omnisend-oldali kezelése az ottani küldési jogosultság forrása; a helyi panel a legutóbbi itt kért állapotot mutatja. Az Omnisendben történt külső státuszváltozások visszaszinkronizálása még nem része ennek a verziónak. A kód nem iratkoztat újra automatikusan, és vásárlástól sem válik valaki feliratkozóvá.
 
-A kifizetett éles rendelésből külön, egyedi adatbázis-sor készül az Omnisendnek, kizárólag sikeresen szinkronizált marketing-hozzájárulás esetén. A `spice laboratory paid order` **egyéni** esemény tartalmazza a rendelésazonosítót, összeget RON-ban, pénznemet és termékeket. Ez nem teljes Omnisend e-commerce katalógus-/kosárintegráció, és nem a beépített `placed order` séma.
+A kifizetett éles rendelésből külön, egyedi adatbázis-sor készül az Omnisendnek, kizárólag sikeresen szinkronizált marketing-hozzájárulás esetén. A `spice laboratory paid order` **egyéni** esemény tartalmazza a rendelésazonosítót, összeget HUF-ban, pénznemet és termékeket. Ez nem teljes Omnisend e-commerce katalógus-/kosárintegráció, és nem a beépített `placed order` séma.
 
 Az események küldése külön kapcsolóval engedélyezhető. Tesztfizetés nem küld eseményt. A fizetést nem akadályozza marketingkiesés. Küldés előtt egyetlen feldolgozó foglalja le a sort. Az Omnisend valós idejű eseményeihez nem garantál távoli deduplikálást: bizonytalan hálózati eredmény esetén a sor `review` marad, automatikusan nem ismételjük meg, és az üzemeltetőnek kell az Omnisendben ellenőriznie. Lefoglalt, félbeszakadt `sending` sor is ilyen ellenőrzést igényel. `pending` sor következő hitelesített fizetésállapot-lekéréskor kézbesíthető; nincs háttérütemező vagy adminisztrációs felület ehhez.
 
@@ -66,3 +66,7 @@ Kampányt, welcome flow-t vagy tömeges küldést nem hoztunk létre és nem ind
 - https://api-docs.omnisend.com/reference/contacts
 - https://api-docs.omnisend.com/reference/post_events
 - https://api-docs.omnisend.com/reference/events
+
+## Ármódosítás – 2026-10-18
+
+Minden termék új ára 2 750 Ft, a Stripe-ban `unit_amount=275000`, pénznem `huf`. Ez kereskedői ár, nem a forrásoldal árának átváltása. A korábbi rendelések és fizetési kísérletek saját pénzneme és összege változatlan marad. A szállítási díjhoz új, explicit HUF-beállítás szükséges; a korábbi RON-beállítás nem kerül újraértelmezésre. A szállítási célország ebben az ármódosításban nem változott.

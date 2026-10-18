@@ -6,7 +6,7 @@ declare namespace Cloudflare {
     STRIPE_WEBHOOK_READY?: string;
     STRIPE_MODE?: string;
     MERCHANT_PRICES_APPROVED?: string;
-    SHIPPING_RON_MINOR?: string;
+    SHIPPING_HUF_MINOR?: string;
     OMNISEND_API_KEY?: string;
     OMNISEND_ENABLED?: string;
     OMNISEND_ORDER_EVENTS_ENABLED?: string;

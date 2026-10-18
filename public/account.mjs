@@ -5,7 +5,7 @@ const h=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt
 const heart='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
 const products=new Map(catalogue.products.map(product=>[product.id,product]));
 const FAVORITES_KEY='spice-lab:guest-favorites:v1';
-let favorites=new Set(),state=null,status='loading',activeTab='profile',favoriteOnly=false;
+let favorites=new Set(),state=null,status='loading',activeTab='profile',favoriteOnly=new URLSearchParams(location.search).get('favorites')==='1';
 let initialGuest=[];
 const pending=new Set();
 try{const stored=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]');if(Array.isArray(stored))initialGuest=[...new Set(stored.filter(id=>products.has(id)))];}catch{}
@@ -83,7 +83,7 @@ export function openAccount(tab='profile'){
  activeTab=['profile','addresses','favorites','orders','invoices','settings'].includes(tab)?tab:'profile';hideNotice();renderAccount();
  window.dispatchEvent(new window.CustomEvent('spice:open-dialog',{detail:'account-dialog'}));
 }
-export function clearFavoritesFilter(){favoriteOnly=false;emit();}
+export function clearFavoritesFilter(){favoriteOnly=false;const params=new URLSearchParams(location.search);if(params.has('favorites')){params.delete('favorites');history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);}emit();}
 let checkoutRequest=null;
 export async function archiveDemoOrder(items,shipping){
  const fingerprint=JSON.stringify({items,shipping});
@@ -101,7 +101,7 @@ export async function initAccount(){
   const favorite=event.target.closest('[data-favorite]');if(favorite){await toggleFavorite(favorite.dataset.favorite);return;}
   const tab=event.target.closest('[data-account-tab]');if(tab){activeTab=tab.dataset.accountTab;hideNotice();renderAccount();return;}
   if(event.target.closest('#copy-address'))for(const field of ['recipient','country','postalCode','city','line1','line2'])$(`#billing-${field}`).value=$(`#shipping-${field}`).value;
-  if(event.target.closest('#show-favorite-products')){favoriteOnly=true;emit();$('#account-dialog').close();$('#termekek').scrollIntoView({block:'start'});}
+  if(event.target.closest('#show-favorite-products')){if(!$('#termekek')){location.assign('/termekek?favorites=1');return;}favoriteOnly=true;emit();$('#account-dialog').close();$('#termekek').scrollIntoView({block:'start'});}
   if(event.target.closest('#retry-account')){status='loading';renderAccount();await loadAccount();renderAccount();}
   if(event.target.closest('[data-open-orders]'))openAccount('orders');
  });

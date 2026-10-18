@@ -191,7 +191,7 @@ export const catalogue = {
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-bbq-pentru-pui-rooster-booster.jpg",
+      "image": "/assets/products/condiment-bbq-pentru-pui-rooster-booster.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2024/09/Rooster-Booster-Condiment-BBQ-Pentru-Pui-si-carne-de-Porc-500x500.jpg",
       "color": "#f6c2cd",
       "ingredients": [
@@ -271,7 +271,7 @@ export const catalogue = {
       "weightGrams": 210,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-pentru-cartofi-prajiti-fries-salt.jpg",
+      "image": "/assets/products/condiment-pentru-cartofi-prajiti-fries-salt.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/09/Fries-Salt-500x500.jpg",
       "color": "#f7dc63",
       "ingredients": [
@@ -327,7 +327,7 @@ export const catalogue = {
       "weightGrams": 130,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/mix-pentru-dip-usturoi-grr-lick.jpg",
+      "image": "/assets/products/mix-pentru-dip-usturoi-grr-lick.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/05/Grr-Lick-Mix-Condiment-Pentru-Sos-De-Usturoi-1-500x500.jpg",
       "color": "#b9d2f2",
       "ingredients": [
@@ -379,7 +379,7 @@ export const catalogue = {
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-bbq-dry-rub-redneck-dust.jpg",
+      "image": "/assets/products/condiment-bbq-dry-rub-redneck-dust.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/05/Redneck-Dust-Codiment-BBQ-Dry-Rub-500x500.jpg",
       "color": "#e7ac91",
       "ingredients": [
@@ -447,7 +447,7 @@ export const catalogue = {
       "weightGrams": 140,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-bagel-crisps-kick.jpg",
+      "image": "/assets/products/condiment-bagel-crisps-kick.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2024/09/Crisps-Kick-Condiment-Bagel-500x500.jpg",
       "color": "#c3d87f",
       "ingredients": [
@@ -499,7 +499,7 @@ export const catalogue = {
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-steak-si-vita-bulls-blaze.jpg",
+      "image": "/assets/products/condiment-steak-si-vita-bulls-blaze.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2024/09/Bulss-Blaze-Condiment-Pentru-Steak-si-Carne-De-Vita-500x500.jpg",
       "color": "#f2b6c3",
       "ingredients": [
@@ -567,7 +567,7 @@ export const catalogue = {
       "weightGrams": 100,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-mix-argentinian-chimichurri.jpg",
+      "image": "/assets/products/condiment-mix-argentinian-chimichurri.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/09/Chimi-Churri-500x500.jpg",
       "color": "#bdd1a2",
       "ingredients": [
@@ -631,7 +631,7 @@ export const catalogue = {
       "weightGrams": 180,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-pentru-gratar-grill-salt-180g.jpg",
+      "image": "/assets/products/condiment-pentru-gratar-grill-salt-180g.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/06/Grill-Salt-500x500.jpg",
       "color": "#ecc084",
       "ingredients": [
@@ -692,7 +692,7 @@ export const catalogue = {
       "weightGrams": 140,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-de-stil-louisiana-cajun-mix-140g.jpg",
+      "image": "/assets/products/condiment-de-stil-louisiana-cajun-mix-140g.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/09/Cajun-Mix-500x500.jpg",
       "color": "#f0a381",
       "ingredients": [
@@ -764,7 +764,7 @@ export const catalogue = {
       "weightGrams": 150,
       "priceMinor": 275000,
       "currency": "HUF",
-      "image": "assets/products/condiment-mix-sweet-onion.jpg",
+      "image": "/assets/products/condiment-mix-sweet-onion.jpg",
       "imageSource": "https://spicelaboratory.ro/wp-content/uploads/2025/07/Sweet-Onion-Condiment-Mix-Pentru-Dressing-De-Salata-cu-Ceapa-Prajita-500x500.jpg",
       "color": "#c6b6dc",
       "ingredients": [

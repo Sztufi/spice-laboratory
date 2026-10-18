@@ -101,7 +101,7 @@ test('filter URLs round-trip, reject invalid values and preserve unrelated param
 test('the page loads its local storefront module without submitting HTML forms to external services', () => {
   const html = readFileSync(new URL('../storefront/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('href="#termekek">FŰSZEREK</a>'));
-  assert.ok(html.includes('type="module" src="shop.mjs"'));
+  assert.ok(html.includes('type="module" src="/shop.mjs"'));
   assert.ok(!/<form[^>]+action="https?:/i.test(html));
 });
 

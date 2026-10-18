@@ -1,3 +1,5 @@
+import { productCard } from './product-markup.mjs';
+import { categoryPath } from './page-data.mjs';
 import { renderCheckout, checkoutSelection, shippingOverview } from './checkout.mjs';
 import { commerceApi } from './commerce.mjs';
 import { formatMoney } from './money.mjs';
@@ -22,7 +24,9 @@ const ingredientsById = new Map(catalogue.ingredients.map(item => [item.id, item
 const productsById = new Map(catalogue.products.map(product => [product.id, product]));
 const label = id => ingredientsById.get(id)?.label || id;
 const CART_KEY = 'spice-lab-unalmas-kaja:demo-cart:v1';
+const pageCategory=document.body.dataset.pageCategory||'';
 let filters = readFilters(location.search, catalogue);
+if(pageCategory)filters.category=pageCategory;
 let cart = [];
 let cartView = 'cart';
 let toastTimer;
@@ -75,37 +79,24 @@ for (const dialog of document.querySelectorAll('dialog')) {
 }
 
 function updateUrl() {
-  const search = writeFilters(filters, location.search);
+  const search = writeFilters(pageCategory?{...filters,category:''}:filters, location.search);
   try { history.replaceState(null, '', `${location.pathname}${search ? `?${search}` : ''}${location.hash}`); } catch { /* Filtering also works without history access. */ }
 }
 
-function cardMarkup(product) {
-  const featured = product.ingredients.filter(item => !['sea-salt', 'cane-sugar', 'brown-sugar', 'raw-sugar', 'rapeseed-oil'].includes(item.id)).slice(0, 2);
-  const rest = product.ingredients.length - featured.length;
-  return `<article class="product-card" style="--product-color:${escape(product.color)}">
-    <div class="product-media"><button class="product-visual" type="button" data-action="detail" data-id="${escape(product.id)}" aria-label="${escape(product.name)} – termékrészletek" aria-haspopup="dialog">
-      <img src="${escape(product.image)}" width="500" height="500" loading="lazy" decoding="async" alt="${escape(product.name)} fűszerkeverék">
-      <span class="weight-tag">${product.weightGrams} g</span>
-      <span class="product-peek" aria-hidden="true">${icon('eye')}</span>
-    </button>${favoriteButtonMarkup(product)}</div>
-    <div class="product-info"><p class="product-subtitle">${escape(product.subtitle)}</p>
-      <h3 style="margin:0"><button class="product-title" type="button" data-action="detail" data-id="${escape(product.id)}" aria-haspopup="dialog">${escape(product.name)}</button></h3>
-      <ul class="card-ingredients" aria-label="Néhány összetevő">${featured.map(item => `<li>${escape(label(item.id))}</li>`).join('')}<li aria-label="További ${rest} összetevő">+${rest}</li></ul>
-      <div class="card-bottom"><p class="product-price">${money(product.priceMinor)}</p><button class="add-button" type="button" data-action="add" data-id="${escape(product.id)}" aria-label="${escape(product.name)} kosárba">KOSÁRBA ${icon('plus')}</button></div>
-    </div>
-  </article>`;
-}
+function cardMarkup(product){return productCard(product,favoriteButtonMarkup(product));}
 
 function renderCatalogue(updateHistory = true) {
+  if(!$('#product-grid'))return;
   const focusedCategory = document.activeElement?.dataset.category;
   let results = filterProducts(catalogue.products, filters, catalogue.ingredients);
   if (favoritesFilterEnabled()) results = results.filter(product => isFavorite(product.id));
   $('#product-grid').innerHTML = results.map(cardMarkup).join('');
-  $('#product-count').textContent = `${results.length} / ${catalogue.products.length} fűszerkeverék`;
+  const available=pageCategory?catalogue.products.filter(product=>product.categories.includes(pageCategory)).length:catalogue.products.length;
+  $('#product-count').textContent = `${results.length} / ${available} fűszerkeverék`;
   $('#empty-results').hidden = results.length > 0;
-  $('#reset-filters').hidden = !filters.query && !filters.category && !filters.ingredients.length && !favoritesFilterEnabled();
+  $('#reset-filters').hidden = !filters.query && (!filters.category||filters.category===pageCategory) && !filters.ingredients.length && !favoritesFilterEnabled();
   $('#categories').innerHTML = [{ id: '', label: 'Mind a 10' }, ...catalogue.categories].map(category =>
-    `<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
+    pageCategory?`<a class="category-chip" href="${categoryPath(category.id)}"${category.id===pageCategory?' aria-current="page"':''}>${escape(category.label)}</a>`:`<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
   ).join('');
   if (focusedCategory !== undefined) [...document.querySelectorAll('[data-category]')].find(button => button.dataset.category === focusedCategory)?.focus({ preventScroll: true });
   $('#active-filters').innerHTML = filters.ingredients.map(id =>
@@ -134,7 +125,7 @@ function renderIngredientOptions() {
 }
 
 function resetFilters() {
-  filters = { query: '', category: '', ingredients: [], match: 'all', sort: 'default' };
+  filters = { query: '', category: pageCategory, ingredients: [], match: 'all', sort: 'default' };
   $('#product-search').value = '';
   $('#sort-products').value = 'default';
   $('#ingredient-search').value = '';
@@ -150,6 +141,7 @@ function showProduct(id) {
     <img class="product-detail-image" src="${escape(product.image)}" width="500" height="500" alt="${escape(product.name)} fűszerkeverék">
     <p class="detail-kicker">${escape(product.subtitle)}</p><h2 id="detail-title">${escape(product.name)}</h2>
     <p class="detail-description">${escape(product.description)}</p>
+    <a class="text-button full-product-link" href="/termek/${escape(product.id)}">Teljes termékoldal →</a>
     <div class="detail-meta"><span>Kiszerelés: ${product.weightGrams} g</span><strong>${money(product.priceMinor)}</strong></div>
     ${shippingOverview(getCommerceConfig(),product.priceMinor)}
     <h3 class="ingredient-title">MI VAN BENNE? · ${product.ingredients.length} ÖSSZETEVŐ</h3>
@@ -259,7 +251,8 @@ document.addEventListener('click', event => {
   }
   const filterIngredient = event.target.closest('[data-filter-ingredient]');
   if (filterIngredient) {
-    filters = { ...filters, category: '', query: '', ingredients: [filterIngredient.dataset.filterIngredient], match: 'all' };
+    if(!$('#product-grid')){location.assign('/termekek?ingredient='+encodeURIComponent(filterIngredient.dataset.filterIngredient));return;}
+    filters = { ...filters, category: pageCategory, query: '', ingredients: [filterIngredient.dataset.filterIngredient], match: 'all' };
     $('#product-search').value = '';
     $('#product-dialog').close();
     renderCatalogue();
@@ -277,8 +270,7 @@ document.addEventListener('click', event => {
     case 'back-cart': renderCart(); $('#cart-content').scrollTop = 0; break;
     case 'continue':
       $('#cart-dialog').close();
-      $('#termekek').scrollIntoView({ block: 'start' });
-      $('#product-search').focus({ preventScroll: true });
+      if($('#termekek')){$('#termekek').scrollIntoView({ block: 'start' });$('#product-search')?.focus({ preventScroll: true });}else location.assign('/termekek');
       break;
     case 'decrease':
     case 'increase':
@@ -318,21 +310,22 @@ document.addEventListener('submit', event => {
   }
 });
 
-$('#product-search').addEventListener('input', event => { filters.query = event.target.value; renderCatalogue(); });
-$('#sort-products').addEventListener('change', event => { filters.sort = event.target.value; renderCatalogue(); });
+$('#product-search')?.addEventListener('input', event => { filters.query = event.target.value; renderCatalogue(); });
+$('#sort-products')?.addEventListener('change', event => { filters.sort = event.target.value; renderCatalogue(); });
 $('#ingredient-search').addEventListener('input', renderIngredientOptions);
-$('#open-filters').addEventListener('click', () => { renderIngredientOptions(); openDialog('filter-dialog'); });
+$('#open-filters')?.addEventListener('click', () => { renderIngredientOptions(); openDialog('filter-dialog'); });
 $('#apply-filters').addEventListener('click', () => $('#filter-dialog').close());
 $('#clear-ingredients').addEventListener('click', () => { filters.ingredients = []; renderCatalogue(); renderIngredientOptions(); });
-$('#reset-filters').addEventListener('click', resetFilters);
-$('#reset-empty').addEventListener('click', resetFilters);
+$('#reset-filters')?.addEventListener('click', resetFilters);
+$('#reset-empty')?.addEventListener('click', resetFilters);
 $('#open-cart').addEventListener('click', showCart);
 $('#toast-cart').addEventListener('click', showCart);
 
 window.addEventListener('popstate', () => {
   filters = readFilters(location.search, catalogue);
-  $('#product-search').value = filters.query;
-  $('#sort-products').value = filters.sort;
+  if(pageCategory)filters.category=pageCategory;
+  if($('#product-search'))$('#product-search').value = filters.query;
+  if($('#sort-products'))$('#sort-products').value = filters.sort;
   renderCatalogue(false);
   if ($('#filter-dialog').open) renderIngredientOptions();
 });
@@ -343,8 +336,9 @@ window.addEventListener('storage', event => {
   if ($('#cart-dialog').open && cartView !== 'confirmation') renderCart();
 });
 
-$('#product-search').value = filters.query;
-$('#sort-products').value = filters.sort;
+if($('#product-search'))$('#product-search').value = filters.query;
+if($('#sort-products'))$('#sort-products').value = filters.sort;
+if(pageCategory&&$('#reset-empty'))$('#reset-empty').textContent='Kategória összes terméke';
 renderCatalogue(false);
 renderCartBadge();
 

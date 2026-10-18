@@ -1,3 +1,4 @@
+import { getCommerceConfig, startStripeCheckout, initCommerce } from './commerce.mjs';
 import { initAccount, isFavorite, favoritesFilterEnabled, favoriteProductIds, favoriteButtonMarkup, clearFavoritesFilter, archiveDemoOrder } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
 import { MAX_QUANTITY, normalize, filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from './shop-core.mjs';
@@ -195,7 +196,7 @@ function renderCart() {
         <div class="cart-item-bottom"><div class="quantity-control"><button type="button" data-action="decrease" data-id="${escape(id)}" aria-label="${escape(product.name)} mennyiségének csökkentése">−</button><output aria-label="${escape(product.name)} mennyisége">${quantity}</output><button type="button" data-action="increase" data-id="${escape(id)}" aria-label="${escape(product.name)} mennyiségének növelése"${quantity >= MAX_QUANTITY ? ' disabled' : ''}>+</button></div><button class="remove-item" type="button" data-action="remove" data-id="${escape(id)}" aria-label="${escape(product.name)} törlése a kosárból">Törlés</button></div>
         <p class="cart-line-total">${money(subtotalMinor)}</p></div></article>`
   ).join('');
-  $('#cart-footer').innerHTML = `<div class="subtotal-row"><span>Termékek összesen</span><strong>${money(totalMinor)}</strong></div><button class="primary-button yellow" type="button" data-action="checkout">TOVÁBB A DEMÓ PÉNZTÁRHOZ ↗</button><p class="demo-note">Kipróbálható kosár és pénztár. Nem történik valódi rendelés vagy fizetés.</p>`;
+  $('#cart-footer').innerHTML = `<div class="subtotal-row"><span>Termékek összesen</span><strong>${money(totalMinor)}</strong></div><button class="primary-button yellow" type="button" data-action="checkout">TOVÁBB A PÉNZTÁRHOZ ↗</button><p class="demo-note">${getCommerceConfig().stripeEnabled ? 'Fizetés a Stripe biztonságos felületén.' : 'A Stripe-fizetés előkészítés alatt. Jelenleg próbavásárlás érhető el.'}</p>`;
 }
 
 function showCart() {
@@ -204,7 +205,19 @@ function showCart() {
   openDialog('cart-dialog');
 }
 
+function showStripeCheckout() {
+  const totals = cartTotals(cart,catalogue.products), config=getCommerceConfig();
+  if(!totals.count){renderCart();return;}
+  cartView='checkout';
+  $('#cart-title').textContent=config.mode==='test'?'STRIPE TESZTFIZETÉS':'PÉNZTÁR';
+  $('#cart-content').innerHTML=`<button class="checkout-back" type="button" data-action="back-cart">← Vissza a kosárhoz</button><div class="stripe-intro"><span class="section-kicker">BIZTONSÁGOS FIZETÉS</span><h3>MÁR CSAK<br>EGY CSIPET.</h3><p>A szállítási és számlázási adataidat a Stripe fizetési oldalán adhatod meg.</p>${config.mode==='test'?'<p class="demo-banner">Tesztmód · nincs valódi pénzmozgás. Csak Stripe tesztkártyát használj.</p>':''}<p>Jelenleg Románián belüli szállítással rendelhetsz.</p></div><div class="checkout-summary"><h3 class="checkout-title">A VÁLOGATÁSOD</h3><ul>${totals.lines.map(({product,quantity,subtotalMinor})=>`<li><span>${quantity} × ${escape(product.name)}</span><strong>${money(subtotalMinor)}</strong></li>`).join('')}<li><span>Szállítás</span><strong>${money(config.shippingMinor)}</strong></li></ul></div><p class="checkout-error" id="stripe-error" role="alert" hidden></p>`;
+  $('#cart-footer').hidden=false;
+  $('#cart-footer').innerHTML=`<div class="subtotal-row"><span>Fizetendő összesen</span><strong>${money(totals.totalMinor+config.shippingMinor)}</strong></div><button class="primary-button yellow" type="button" id="stripe-pay">${config.mode==='test'?'STRIPE TESZTFIZETÉS':'FIZETÉS STRIPE-PAL'} ↗</button><p class="demo-note">A bankkártyaadataidat a Stripe kezeli. Hírlevélre külön iratkozhatsz fel.</p>`;
+  $('#stripe-pay').addEventListener('click',async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='ÁTIRÁNYÍTÁS…';try{await startStripeCheckout(cart);}catch(error){const message=$('#stripe-error');message.hidden=false;message.textContent=error.message;button.disabled=false;button.textContent='ÚJRAPRÓBÁLOM ↗';}});
+  $('#cart-content').scrollTop=0;
+}
 function showCheckout() {
+  if(getCommerceConfig().stripeEnabled){showStripeCheckout();return;}
   const totals = cartTotals(cart, catalogue.products);
   if (!totals.count) { renderCart(); return; }
   cartView = 'checkout';
@@ -356,3 +369,15 @@ window.addEventListener('spice:favorites-change', () => renderCatalogue(false));
 window.addEventListener('spice:open-dialog', event => openDialog(event.detail));
 window.addEventListener('spice:notice', event => toast(event.detail, false));
 initAccount().catch(() => {});
+
+initCommerce(async result=>{
+  if(result.status!=='paid')return;
+  let completed=[];try{completed=JSON.parse(localStorage.getItem('spice-lab:completed-payments:v1')||'[]');if(!Array.isArray(completed))completed=[];}catch{}
+  // A refreshed or copied return URL must not remove quantities twice.
+  if(!completed.includes(result.orderId))for(const item of result.items||[]){const current=cart.find(line=>line.id===item.id);if(current)cart=setQuantity(cart,item.id,current.quantity-item.quantity,catalogue.products);}
+  persistCart();try{localStorage.setItem('spice-lab:completed-payments:v1',JSON.stringify([...new Set([...completed,result.orderId])].slice(-50)));}catch{}renderCart();
+  window.dispatchEvent(new CustomEvent('spice:account-refresh'));
+  $('#cart-title').textContent=result.mode==='test'?'TESZTFIZETÉS SIKERÜLT':'FIZETÉS SIKERÜLT';
+  $('#cart-content').innerHTML=`<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>KÖSZÖNJÜK<br>A RENDELÉST!</h3><p>${result.mode==='test'?'A Stripe tesztfizetést visszaigazoltuk. Nem történt valódi pénzmozgás.':'A Stripe visszaigazolta a fizetésedet.'}</p><p>A rendelés a saját fiókodban is megtalálható. A fizetési visszaigazolás nem számla.</p><button class="primary-button yellow" type="button" data-open-orders>RENDELÉSEIM →</button></div>`;
+  $('#cart-footer').hidden=true;openDialog('cart-dialog');
+}).catch(()=>{});

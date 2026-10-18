@@ -38,6 +38,10 @@ Ez a modul **nem** beléptető végpont, és **nem** ad ki saját munkamenetet. 
 - A fióktörlés jelenleg rögzített kérés, nem automatikus teljes törlés. Az üzemeltetői feldolgozást, értesítést és a megőrzendő rendelési/számlázási adatok kezelését még be kell kötni.
 - Nincs jelszótárolás, kártyaadat-kezelés, éles fizetés, valós rendelésimport vagy számlakiállítás ebben a szakaszban.
 
+## Stripe és Omnisend
+
+A pénztár, a fizetési webhook, a rendelésarchiválás és a hozzájárulásos hírlevél új modulja elkészült, de nincs aktiválva. Beállítások és korlátok: [STRIPE-OMNISEND.md](STRIPE-OMNISEND.md).
+
 ## Következő kereskedelmi integrációk
 
 - WooCommerce/Shopify vásárlói és rendelési kapcsolatok: szolgáltatói azonosítók és jogosultsággal ellátott szerveroldali API-kulcsok, hitelesített webhookok és ismételt események kezelése. Korábbi rendelést kizárólag e-mail-egyezés alapján nem kapcsolunk automatikusan egy új fiókhoz.

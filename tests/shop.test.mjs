@@ -98,7 +98,7 @@ test('filter URLs round-trip, reject invalid values and preserve unrelated param
   assert.deepEqual(invalid, { query: '', category: '', ingredients: [], match: 'all', sort: 'default' });
 });
 
-test('the page points to its own catalogue and has no external checkout submission', () => {
+test('the page loads its local storefront module without submitting HTML forms to external services', () => {
   const html = readFileSync(new URL('../storefront/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('href="#termekek">FŰSZEREK</a>'));
   assert.ok(html.includes('type="module" src="shop.mjs"'));

@@ -26,3 +26,24 @@ export const accountRequests = sqliteTable('customer_account_requests', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), kind: text('kind').notNull(),
   status: text('status').notNull().default('pending'), createdAt: text('created_at').notNull()
 });
+
+export const checkouts = sqliteTable('payment_checkouts', {
+  id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), requestId: text('request_id').notNull(),
+  fingerprint: text('fingerprint').notNull(), itemsJson: text('items_json').notNull(), totalMinor: integer('total_minor').notNull(),
+  currency: text('currency').notNull(), mode: text('mode').notNull(), status: text('status').notNull().default('creating'),
+  sessionId: text('session_id'), sessionUrl: text('session_url'), expiresAt: integer('expires_at'),
+  customerJson: text('customer_json'), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
+}, table => [uniqueIndex('checkout_user_request').on(table.userId,table.requestId),uniqueIndex('checkout_session').on(table.sessionId)]);
+export const paymentEvents = sqliteTable('payment_events', {
+  id:text('id').primaryKey(), checkoutId:text('checkout_id').notNull().references(()=>checkouts.id), type:text('type').notNull(), createdAt:text('created_at').notNull()
+});
+export const marketingPreferences = sqliteTable('marketing_preferences', {
+  userId:text('user_id').primaryKey().references(()=>customers.id), email:text('email').notNull(), status:text('status').notNull(),
+  consentVersion:text('consent_version').notNull(), changedAt:text('changed_at').notNull(), syncStatus:text('sync_status').notNull(),
+  revision:text('revision').notNull(), syncedAt:text('synced_at')
+});
+export const marketingEvents = sqliteTable('marketing_events', {
+  id:text('id').primaryKey(), userId:text('user_id').notNull().references(()=>customers.id), orderId:text('order_id').notNull().references(()=>orders.id),
+  payloadJson:text('payload_json').notNull(), status:text('status').notNull().default('pending'), createdAt:text('created_at').notNull(),
+  updatedAt:text('updated_at').notNull()
+}, table=>[uniqueIndex('marketing_order').on(table.orderId)]);

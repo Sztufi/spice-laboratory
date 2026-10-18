@@ -122,6 +122,8 @@ export async function handleAccountRequest(request,{db,bucket,user}) {
     }
     if(request.method==='GET' && route.length===1 && route[0]==='export') {
       const data=await accountData(db,user);
+      data.marketingPreferences=await query(db,'SELECT email,status,consent_version,changed_at,sync_status,synced_at FROM marketing_preferences WHERE user_id=?',user.userId).first();
+      data.payments=await rows(db,'SELECT id,status,total_minor,currency,mode,items_json,customer_json,created_at FROM payment_checkouts WHERE user_id=? ORDER BY created_at DESC LIMIT 100',user.userId);
       return new Response(JSON.stringify({exportedAt:new Date().toISOString(),...data},null,2),{headers:{...headers,'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="spice-laboratory-fiok.json"'}});
     }
     if(request.method==='POST' && route.length===1 && route[0]==='deletion-request') {

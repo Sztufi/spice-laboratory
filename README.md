@@ -5,6 +5,7 @@ Mobilra tervezett fűszer-webshop előnézet, kedvencekkel és szerveroldali vá
 - Boltfelület: `storefront/index.html`, `public/`
 - Fiók API: `app/api/account/[[...path]]/route.ts`, `server/account.mjs`
 - Stripe és Omnisend API: `app/api/commerce/[[...path]]/route.ts`, `server/commerce.mjs`
+- Vendégpénztár és szállítás: [docs/GUEST-CHECKOUT-SHIPPING.md](docs/GUEST-CHECKOUT-SHIPPING.md)
 - Aktiválás és üzemeltetés: [docs/STRIPE-OMNISEND.md](docs/STRIPE-OMNISEND.md)
 - D1 séma és migráció: `db/schema.ts`, `drizzle/`
 - Google-előkészítés és élesítési feltételek: [docs/CUSTOMER-ACCOUNTS.md](docs/CUSTOMER-ACCOUNTS.md)

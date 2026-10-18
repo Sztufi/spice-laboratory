@@ -14,6 +14,7 @@ export const favorites = sqliteTable('customer_favorites', {
 }, table => [primaryKey({ columns: [table.userId, table.productId] })]);
 export const orders = sqliteTable('customer_orders', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), requestId: text('request_id').notNull(),
+  shippingJson:text('shipping_json'),
   number: text('number').notNull(), kind: text('kind').notNull().default('demo'), status: text('status').notNull(),
   totalMinor: integer('total_minor').notNull(), currency: text('currency').notNull(), itemsJson: text('items_json').notNull(), createdAt: text('created_at').notNull()
 }, table => [uniqueIndex('order_user_request').on(table.userId, table.requestId)]);
@@ -32,6 +33,7 @@ export const checkouts = sqliteTable('payment_checkouts', {
   fingerprint: text('fingerprint').notNull(), itemsJson: text('items_json').notNull(), totalMinor: integer('total_minor').notNull(),
   currency: text('currency').notNull(), mode: text('mode').notNull(), status: text('status').notNull().default('creating'),
   sessionId: text('session_id'), sessionUrl: text('session_url'), expiresAt: integer('expires_at'),
+  shippingJson:text('shipping_json'),
   customerJson: text('customer_json'), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
 }, table => [uniqueIndex('checkout_user_request').on(table.userId,table.requestId),uniqueIndex('checkout_session').on(table.sessionId)]);
 export const paymentEvents = sqliteTable('payment_events', {
@@ -47,3 +49,8 @@ export const marketingEvents = sqliteTable('marketing_events', {
   payloadJson:text('payload_json').notNull(), status:text('status').notNull().default('pending'), createdAt:text('created_at').notNull(),
   updatedAt:text('updated_at').notNull()
 }, table=>[uniqueIndex('marketing_order').on(table.orderId)]);
+
+export const guestCheckoutAccess = sqliteTable('guest_checkout_access', {
+  tokenHash:text('token_hash').primaryKey(),customerId:text('customer_id').notNull().references(()=>customers.id),
+  expiresAt:integer('expires_at').notNull(),createdAt:text('created_at').notNull()
+});

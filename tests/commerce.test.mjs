@@ -4,19 +4,19 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {handleCommerceRequest,commerceConfig,verifyStripeEvent,CONSENT_VERSION} from '../server/commerce.mjs';
 const origin='https://spice.test',alice={userId:'alice',email:'alice@example.com',fullName:'Alice'},bob={userId:'bob',email:'bob@example.com'};
-const env={STRIPE_ENABLED:'true',STRIPE_MODE:'test',STRIPE_SECRET_KEY:'sk_test_fake',STRIPE_WEBHOOK_SECRET:'whsec_fake',STRIPE_WEBHOOK_READY:'true',SHIPPING_HUF_MINOR:'99000',MERCHANT_PRICES_APPROVED:'true',OMNISEND_ENABLED:'true',OMNISEND_API_KEY:'fake'};
+const env={STRIPE_ENABLED:'true',STRIPE_MODE:'test',STRIPE_SECRET_KEY:'sk_test_fake',STRIPE_WEBHOOK_SECRET:'whsec_fake',STRIPE_WEBHOOK_READY:'true',SHIPPING_METHODS_JSON:JSON.stringify([{id:'hu-home',label:'Házhozszállítás',country:'HU',feeMinor:99000,deliveryMinDays:2,deliveryMaxDays:4},{id:'ro-home',label:'Házhozszállítás',country:'RO',feeMinor:199000,deliveryMinDays:1,deliveryMaxDays:3}]),MERCHANT_PRICES_APPROVED:'true',OMNISEND_ENABLED:'true',OMNISEND_API_KEY:'fake'};
 function database(){const sqlite=new DatabaseSync(':memory:');for(const name of readdirSync(new URL('../drizzle/',import.meta.url)).filter(x=>x.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+name,import.meta.url),'utf8'));const db={prepare(sql){return {bind(...args){return {async run(){return sqlite.prepare(sql).run(...args);},async first(){return sqlite.prepare(sql).get(...args)||null;},async all(){return {results:sqlite.prepare(sql).all(...args)};}};}};},async batch(statements){sqlite.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};return {sqlite,db};}
 function request(path,method='GET',body,customOrigin=origin){return new Request(origin+'/api/commerce/'+path,{method,headers:{Origin:customOrigin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});}
 function call(ctx,path,method='GET',body){return handleCommerceRequest(request(path,method,body),ctx);}
 function mockStripe(){let calls=0,params;const session={id:'cs_test_123',url:'https://checkout.stripe.com/c/pay/cs_test_123',expires_at:Math.floor(Date.now()/1000)+3600,livemode:false,status:'open',payment_status:'unpaid',currency:'huf',amount_total:649000};return {session,get calls(){return calls;},get params(){return params;},async fetcher(url,options){calls++;if(options.method==='POST'){params=new URLSearchParams(options.body);session.metadata={checkout_id:params.get('metadata[checkout_id]')};session.client_reference_id=params.get('client_reference_id');}return Response.json(session);}};}
 async function sign(event,secret=env.STRIPE_WEBHOOK_SECRET,t=Math.floor(Date.now()/1000)){const raw=JSON.stringify(event),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${t}.${raw}`)));return {raw,signature:`t=${t},v1=${Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('')}`};}
 async function webhook(ctx,event,options={}){const signed=await sign(event,options.secret,options.timestamp);return handleCommerceRequest(new Request(origin+'/api/commerce/stripe-webhook',{method:'POST',headers:{'stripe-signature':signed.signature},body:options.body??signed.raw}),ctx);}
-const checkoutBody=()=>({requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1});
+const checkoutBody=()=>({checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1});
 test('provider configuration fails closed until every payment prerequisite is explicit',()=>{
  assert.equal(commerceConfig().stripeEnabled,false);assert.equal(commerceConfig(env).stripeEnabled,true);
- for(const key of ['STRIPE_WEBHOOK_READY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','SHIPPING_HUF_MINOR','MERCHANT_PRICES_APPROVED'])assert.equal(commerceConfig({...env,[key]:undefined}).stripeEnabled,false,key);
+ for(const key of ['STRIPE_WEBHOOK_READY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','SHIPPING_METHODS_JSON','MERCHANT_PRICES_APPROVED'])assert.equal(commerceConfig({...env,[key]:undefined}).stripeEnabled,false,key);
  assert.equal(commerceConfig({...env,STRIPE_MODE:'live'}).stripeEnabled,false);
- assert.equal(commerceConfig({...env,SHIPPING_HUF_MINOR:'-1'}).stripeEnabled,false);
+ assert.equal(commerceConfig({...env,SHIPPING_METHODS_JSON:'invalid'}).stripeEnabled,false);
  assert.equal(commerceConfig().newsletterEnabled,false);
 });
 test('checkout requires identity and same-origin and never trusts browser prices',async()=>{
@@ -25,7 +25,7 @@ test('checkout requires identity and same-origin and never trusts browser prices
  assert.equal((await handleCommerceRequest(request('checkout','POST',checkoutBody(),'https://attacker.test'),ctx)).status,403);
  const input=checkoutBody(),result=await call(ctx,'checkout','POST',input);assert.equal(result.status,201);
  assert.equal(mock.params.get('line_items[0][price_data][currency]'),'huf');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][currency]'),'huf');assert.equal(mock.params.get('line_items[0][price_data][unit_amount]'),'275000');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][amount]'),'99000');
- assert.equal(mock.params.get('customer_email'),alice.email);assert.equal(mock.params.get('shipping_address_collection[allowed_countries][0]'),'RO');
+ assert.equal(mock.params.get('customer_email'),alice.email);assert.equal(mock.params.get('shipping_address_collection[allowed_countries][0]'),'HU');
  assert.equal((await call(ctx,'checkout','POST',input)).status,200);assert.equal(mock.calls,1);
  assert.equal((await call(ctx,'checkout','POST',{...input,items:[{id:'fries-salt',quantity:3}]})).status,409);
  for(const items of [[{id:'unknown',quantity:1}],[{id:'fries-salt',quantity:1.2}],[{id:'fries-salt',quantity:100}],[]])assert.equal((await call(ctx,'checkout','POST',{...checkoutBody(),items})).status,400);
@@ -79,4 +79,75 @@ test('live paid events require consent and explicit enablement, are claimed once
  await call(ctx,'marketing','PUT',{subscribed:true,consentVersion:CONSENT_VERSION});await call(ctx,'checkout','POST',checkoutBody());mock.session.status='complete';mock.session.payment_status='paid';
  assert.equal((await call(ctx,'checkout-status?session_id=cs_test_123')).status,200);assert.equal(eventCalls,1);assert.equal(sqlite.prepare('SELECT status FROM marketing_events').get().status,'review');
  await call(ctx,'checkout-status?session_id=cs_test_123');await deliverMarketingEvent(ctx,sqlite.prepare('SELECT id FROM customer_orders').get().id);assert.equal(eventCalls,1);
+});
+
+async function callCookie(ctx,path,method='GET',input,cookie){const req=request(path,method,input);if(cookie)req.headers.set('Cookie',cookie);return handleCommerceRequest(req,ctx);}
+async function guestCookie(ctx){const response=await call(ctx,'checkout-access','POST',{});assert.equal(response.status,200);return response.headers.get('set-cookie').split(';')[0];}
+test('guest checkout access is server-issued, cookie-only, short-lived, and cannot access account APIs',async()=>{
+ const {db,sqlite}=database(),ctx={db,env,user:null};
+ assert.equal((await handleCommerceRequest(request('checkout-access','POST',{},'https://attacker.test'),ctx)).status,403);
+ const response=await call(ctx,'checkout-access','POST',{}),header=response.headers.get('set-cookie'),cookie=header.split(';')[0];
+ for(const flag of ['__Host-spice-checkout=','HttpOnly','Secure','SameSite=Lax','Path=/','Max-Age=86400'])assert.ok(header.includes(flag));
+ const row=sqlite.prepare('SELECT * FROM guest_checkout_access').get();assert.equal(row.token_hash.length,64);assert.notEqual(row.token_hash,cookie.split('=')[1]);assert.ok(row.customer_id.startsWith('guest:'));assert.ok(row.expires_at>Date.now());
+ const repeated=await callCookie(ctx,'checkout-access','POST',{},cookie);assert.equal(repeated.headers.get('set-cookie'),null);assert.equal(sqlite.prepare('SELECT count(*) AS n FROM guest_checkout_access').get().n,1);
+ assert.equal((await callCookie(ctx,'marketing','GET',undefined,cookie)).status,401);
+ const {handleAccountRequest}=await import('../server/account.mjs');assert.equal((await handleAccountRequest(request('profile'),{db,user:null})).status,401);
+});
+test('guest can pay without an account, while session IDs alone and other visitors grant no access',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:null,fetcher:mock.fetcher},cookie=await guestCookie(ctx);
+ const input={...checkoutBody(),checkoutMode:'guest',email:alice.email};
+ assert.equal((await callCookie(ctx,'checkout','POST',input,cookie)).status,201);assert.equal(mock.params.has('customer_email'),false);
+ assert.equal((await callCookie(ctx,'checkout','POST',input,cookie)).status,200);assert.equal(mock.calls,1);
+ assert.equal((await call({...ctx,user:alice},'checkout-status?session_id=cs_test_123')).status,404);
+ const stranger=await guestCookie(ctx);assert.equal((await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,stranger)).status,404);
+ mock.session.status='complete';mock.session.payment_status='paid';mock.session.customer_details={email:alice.email};
+ const response=await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,cookie),result=await response.json();assert.equal(result.status,'paid');assert.equal(result.guest,true);assert.equal(result.shipping.country,'HU');
+ const row=sqlite.prepare('SELECT * FROM customer_orders').get();assert.ok(row.user_id.startsWith('guest:'));assert.equal(row.total_minor,649000);assert.equal(JSON.parse(row.shipping_json).id,'hu-home');
+ assert.equal(sqlite.prepare('SELECT count(*) AS n FROM customers WHERE id=?').get(alice.userId).n,0);assert.equal(sqlite.prepare('SELECT count(*) AS n FROM marketing_events').get().n,0);
+});
+test('guest order linking requires the paid receipt capability AND explicit authenticated account approval',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:null,fetcher:mock.fetcher},cookie=await guestCookie(ctx);
+ await callCookie(ctx,'checkout','POST',{...checkoutBody(),checkoutMode:'guest'},cookie);
+ assert.equal((await callCookie({...ctx,user:alice},'claim-order','POST',{sessionId:'cs_test_123'},cookie)).status,404);
+ mock.session.status='complete';mock.session.payment_status='paid';await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,cookie);
+ assert.equal((await callCookie(ctx,'claim-order','POST',{sessionId:'cs_test_123'},cookie)).status,401);
+ assert.equal((await call({...ctx,user:alice},'claim-order','POST',{sessionId:'cs_test_123'})).status,403);
+ const linked=await callCookie({...ctx,user:alice},'claim-order','POST',{sessionId:'cs_test_123',userId:bob.userId},cookie);assert.equal(linked.status,200);
+ assert.equal(sqlite.prepare('SELECT user_id FROM customer_orders').get().user_id,alice.userId);assert.equal(sqlite.prepare('SELECT user_id FROM payment_checkouts').get().user_id,alice.userId);
+ assert.equal((await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,cookie)).status,404);
+ assert.equal((await call({...ctx,user:alice},'checkout-status?session_id=cs_test_123')).status,200);
+ assert.equal((await callCookie({...ctx,user:alice},'claim-order','POST',{sessionId:'cs_test_123'},cookie)).status,200);
+ assert.equal((await callCookie({...ctx,user:bob},'claim-order','POST',{sessionId:'cs_test_123'},cookie)).status,404);
+});
+test('expired and fabricated guest capabilities are rejected before checkout or receipt access',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:null,fetcher:mock.fetcher},cookie=await guestCookie(ctx);
+ await callCookie(ctx,'checkout','POST',{...checkoutBody(),checkoutMode:'guest'},cookie);
+ sqlite.prepare('UPDATE guest_checkout_access SET expires_at=0').run();
+ assert.equal((await callCookie(ctx,'checkout','POST',{...checkoutBody(),checkoutMode:'guest'},cookie)).status,401);
+ assert.equal((await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,cookie)).status,404);
+ assert.equal((await callCookie(ctx,'checkout','POST',{...checkoutBody(),checkoutMode:'guest'},'__Host-spice-checkout='+'a'.repeat(64))).status,401);
+});
+test('shipping is country-scoped, server priced, immutable in the order, and part of idempotency',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher},input=checkoutBody();
+ assert.equal((await call(ctx,'checkout','POST',{...input,country:'RO'})).status,400);
+ assert.equal((await call(ctx,'checkout','POST',{...input,shippingMethodId:'not-real'})).status,400);
+ assert.equal((await call(ctx,'checkout','POST',{...input,shippingMinor:1})).status,201);
+ assert.equal(mock.params.get('shipping_address_collection[allowed_countries][0]'),'HU');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]'),'2');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]'),'4');
+ assert.equal((await call(ctx,'checkout','POST',{...input,country:'RO',shippingMethodId:'ro-home'})).status,409);
+ mock.session.status='complete';mock.session.payment_status='paid';await call(ctx,'checkout-status?session_id=cs_test_123');
+ assert.equal(JSON.parse(sqlite.prepare('SELECT shipping_json FROM customer_orders').get().shipping_json).feeMinor,99000);
+});
+test('free shipping thresholds are applied by the server and malformed merchant rate configuration fails closed',async()=>{
+ const {shippingMethods,shippingQuote}=await import('../server/shipping.mjs');
+ const methods=[{id:'hu-home',country:'HU',label:'Házhozszállítás',feeMinor:99000,deliveryMinDays:2,deliveryMaxDays:4,freeAboveMinor:550000}];
+ assert.equal(shippingQuote(methods,{country:'HU',methodId:'hu-home'},549999).feeMinor,99000);assert.equal(shippingQuote(methods,{country:'HU',methodId:'hu-home'},550000).feeMinor,0);
+ assert.equal(shippingQuote(methods,{country:'RO',methodId:'hu-home'},550000),null);
+ for(const value of ['invalid',JSON.stringify([{...methods[0],feeMinor:-1}]),JSON.stringify([...methods,...methods]),JSON.stringify([{...methods[0],deliveryMaxDays:1}])])assert.deepEqual(shippingMethods({SHIPPING_METHODS_JSON:value}),[]);
+ const {db}=database(),mock=mockStripe();const ctx={db,user:alice,env:{...env,SHIPPING_METHODS_JSON:JSON.stringify(methods)},fetcher:mock.fetcher};await call(ctx,'checkout','POST',checkoutBody());assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][amount]'),'0');
+});
+test('demo account orders use the same approved shipping quote and retain it in their archive',async()=>{
+ const {handleAccountRequest}=await import('../server/account.mjs');const {db,sqlite}=database();
+ const req=new Request(origin+'/api/account/demo-orders',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2}],shipping:{country:'HU',shippingMethodId:'hu-home',feeMinor:1}})});
+ const response=await handleAccountRequest(req,{db,user:alice,env});assert.equal(response.status,201);
+ const row=sqlite.prepare('SELECT total_minor,shipping_json FROM customer_orders').get();assert.equal(row.total_minor,649000);assert.equal(JSON.parse(row.shipping_json).feeMinor,99000);
 });

@@ -3,7 +3,7 @@ import { getChatGPTUser } from '../../../chatgpt-auth';
 import { handleAccountRequest } from '../../../../server/account.mjs';
 export const dynamic = 'force-dynamic';
 async function handle(request: Request) {
-  return handleAccountRequest(request, { db: env.DB, bucket: env.BUCKET, user: await getChatGPTUser() });
+  return handleAccountRequest(request, { env, db: env.DB, bucket: env.BUCKET, user: await getChatGPTUser() });
 }
 export const GET = handle;
 export const POST = handle;

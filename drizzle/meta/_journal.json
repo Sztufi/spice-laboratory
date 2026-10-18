@@ -15,6 +15,13 @@
       "when": 1792349803103,
       "tag": "0001_white_slayback",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792351931310,
+      "tag": "0002_fearless_maggott",
+      "breakpoints": true
     }
   ]
 }

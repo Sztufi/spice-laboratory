@@ -1,3 +1,5 @@
+import { shippingMethods, shippingQuote, SHIPPING_COUNTRIES } from './shipping.mjs';
+import { guestCheckoutAccess, issueGuestCheckoutAccess } from './guest-checkout.mjs';
 import { catalogue } from '../public/catalogue.mjs';
 import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
@@ -10,9 +12,9 @@ export const CONSENT_VERSION='email-marketing-v1';
 export const CONSENT_TEXT='Szeretnék e-mailben recepteket, újdonságokat és ajánlatokat kapni a Spice Laboratorytól az Omnisend közreműködésével. Bármikor leiratkozhatok.';
 export function commerceConfig(env={}) {
  const mode=env.STRIPE_MODE==='live'?'live':'test';
- const shipping=Number(env.SHIPPING_HUF_MINOR);
- const configured=env.STRIPE_ENABLED==='true' && typeof env.STRIPE_SECRET_KEY==='string' && env.STRIPE_SECRET_KEY.startsWith(`sk_${mode}_`) && !!env.STRIPE_WEBHOOK_SECRET && env.STRIPE_WEBHOOK_READY==='true' && Number.isSafeInteger(shipping) && shipping>=0 && shipping<=10000000 && env.SHIPPING_HUF_MINOR!==undefined && env.MERCHANT_PRICES_APPROVED==='true';
- return {stripeEnabled:configured,mode,shippingMinor:configured?shipping:null,newsletterEnabled:!!env.OMNISEND_API_KEY&&env.OMNISEND_ENABLED==='true',consentVersion:CONSENT_VERSION,consentText:CONSENT_TEXT};
+ const methods=shippingMethods(env);
+ const configured=env.STRIPE_ENABLED==='true' && typeof env.STRIPE_SECRET_KEY==='string' && env.STRIPE_SECRET_KEY.startsWith(`sk_${mode}_`) && !!env.STRIPE_WEBHOOK_SECRET && env.STRIPE_WEBHOOK_READY==='true' && methods.length>0 && env.MERCHANT_PRICES_APPROVED==='true';
+ return {stripeEnabled:configured,mode,shippingMethods:methods,shippingCountries:SHIPPING_COUNTRIES,newsletterEnabled:!!env.OMNISEND_API_KEY&&env.OMNISEND_ENABLED==='true',consentVersion:CONSENT_VERSION,consentText:CONSENT_TEXT};
 }
 async function readLimited(request,limit){
  if(Number(request.headers.get('content-length')||0)>limit)fail(413,'Túl nagy kérés.');
@@ -48,26 +50,29 @@ function validateItems(items){
  const ids=new Set();for(const item of items){if(!catalogue.products.some(p=>p.id===item?.id)||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>99||ids.has(item.id))fail(400,'Hibás termék vagy mennyiség.');ids.add(item.id);}
  return cartTotals(items,catalogue.products);
 }
-async function createCheckout(request,ctx,config){
+async function createCheckout(request,ctx,config,input){
  const {db,user,env,fetcher}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
- const input=await body(request);if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
+ if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
  const totals=validateItems(input.items);
  const items=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
- const total=totals.totalMinor+config.shippingMinor;
- const fingerprint=JSON.stringify({items,shipping:config.shippingMinor,mode:config.mode});
+ const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},totals.totalMinor);if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
+ const total=totals.totalMinor+shipping.feeMinor;
+ const fingerprint=JSON.stringify({items,shipping,mode:config.mode});
  await customer(db,user);
  let row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();
  if(row&&row.fingerprint!==fingerprint)fail(409,'Ehhez a fizetéshez más kosár tartozik. Indíts új fizetést.');
- if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now()).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
+ if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now(),JSON.stringify(shipping)).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
  if(row.fingerprint!==fingerprint)fail(409,'A kosár időközben megváltozott.');
  if(row.status==='paid')fail(409,'Ezt a rendelést már kifizetted.');
  if(row.session_id){if(row.expires_at*1000<=Date.now())fail(409,'A fizetési hivatkozás lejárt. Indíts új fizetést.');return json({url:row.session_url,checkoutId:row.id,mode:row.mode});}
  // Never reuse a possibly forgotten Stripe idempotency key after its retention window.
  if(Date.now()-Date.parse(row.created_at)>23*60*60*1000)fail(409,'Ez a fizetési kísérlet lejárt. Indíts új fizetést.');
  const origin=new URL(request.url).origin;
- const params=new URLSearchParams({mode:'payment',locale:'hu',customer_email:user.email,billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':'RO',success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
+ const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':shipping.country,success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
+ if(user.email)params.set('customer_email',user.email);
  for(const [i,item] of items.entries()){params.set(`line_items[${i}][price_data][currency]`,catalogue.currency.toLowerCase());params.set(`line_items[${i}][price_data][unit_amount]`,String(item.priceMinor));params.set(`line_items[${i}][price_data][product_data][name]`,item.name);params.set(`line_items[${i}][quantity]`,String(item.quantity));}
- params.set('shipping_options[0][shipping_rate_data][type]','fixed_amount');params.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]',String(config.shippingMinor));params.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]',catalogue.currency.toLowerCase());params.set('shipping_options[0][shipping_rate_data][display_name]','Romániai szállítás');
+ params.set('shipping_options[0][shipping_rate_data][type]','fixed_amount');params.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]',String(shipping.feeMinor));params.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]',catalogue.currency.toLowerCase());params.set('shipping_options[0][shipping_rate_data][display_name]',shipping.label);
+ params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]',String(shipping.deliveryMinDays));params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]',String(shipping.deliveryMaxDays));
  const session=await stripe(env,'checkout/sessions',{params,key:`spice-checkout-${row.id}`,fetcher});
  if(!/^cs_[a-zA-Z0-9_]+$/.test(session.id||'')||!session.url?.startsWith('https://checkout.stripe.com/')||!Number.isInteger(session.expires_at)||session.expires_at*1000<=Date.now()||session.livemode!==(config.mode==='live'))fail(502,'Érvénytelen fizetési válasz.');
  await q(db,"UPDATE payment_checkouts SET session_id=?,session_url=?,expires_at=?,status='open',updated_at=? WHERE id=? AND status='creating'",session.id,session.url,session.expires_at,now(),row.id).run();
@@ -80,12 +85,12 @@ async function applySession(db,row,session,eventId,eventType){
  const statements=[q(db,"UPDATE payment_checkouts SET status=CASE WHEN status='paid' THEN status ELSE ? END, customer_json=COALESCE(?,customer_json),updated_at=? WHERE id=?",status,paid?JSON.stringify({billing:session.customer_details,shipping:session.collected_information?.shipping_details??session.shipping_details??null}):null,now(),row.id)];
  if(paid){
  const number=`SL-${row.id.slice(0,8).toUpperCase()}`;
- statements.push(q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',row.id,row.user_id,`stripe:${row.id}`,number,row.mode==='live'?'stripe':'stripe-test','paid',row.total_minor,row.currency,row.items_json,now()));
+ statements.push(q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',row.id,row.user_id,`stripe:${row.id}`,number,row.mode==='live'?'stripe':'stripe-test','paid',row.total_minor,row.currency,row.items_json,now(),row.shipping_json));
  // Queue only; delivery is a separate, explicitly enabled operation. Test payments never become marketing events.
  if(row.mode==='live')statements.push(q(db,"INSERT INTO marketing_events(id,user_id,order_id,payload_json,status,created_at,updated_at) SELECT ?,?,?,?,?,?,? FROM marketing_preferences WHERE user_id=? AND status='subscribed' AND sync_status='synced' ON CONFLICT(order_id) DO NOTHING",crypto.randomUUID(),row.user_id,row.id,JSON.stringify({orderID:row.id,orderNumber:number,currency:row.currency,value:row.total_minor/100,items:JSON.parse(row.items_json)}),'pending',now(),now(),row.user_id));
  }
  if(eventId)statements.push(q(db,'INSERT INTO payment_events(id,checkout_id,type,created_at) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',eventId,row.id,eventType,now()));
- await db.batch(statements);return {status:row.status==='paid'?'paid':status,orderId:paid||row.status==='paid'?row.id:null,mode:row.mode,items:JSON.parse(row.items_json)};
+ await db.batch(statements);return {status:row.status==='paid'?'paid':status,orderId:paid||row.status==='paid'?row.id:null,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null};
 }
 async function syncPreference(ctx,row){
  const {db,env,fetcher=fetch}=ctx;
@@ -124,7 +129,7 @@ export async function deliverMarketingEvent(ctx,orderId){
 export async function handleCommerceRequest(request,ctx){
  try {
  const {db,user,env={}}=ctx,config=commerceConfig(env),url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
- if(request.method==='GET'&&path==='config')return json(config);
+ if(request.method==='GET'&&path==='config')return json({...config,accountAvailable:!!user?.userId&&!!user?.email});
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stripe-webhook'&&request.method==='POST'){
  const raw=await readLimited(request,262144);const event=await verifyStripeEvent(raw,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
@@ -135,16 +140,37 @@ export async function handleCommerceRequest(request,ctx){
  if(!row)return json({received:true,ignored:true});
  await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({received:true});
  }
- if(!user?.userId||!user?.email)fail(401,'Ehhez jelentkezz be a fiókodba.');
  if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
- if(path==='checkout'&&request.method==='POST')return await createCheckout(request,ctx,config);
+ if(path==='checkout-access'&&request.method==='POST'){
+  if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
+  await body(request);const cookie=await issueGuestCheckoutAccess(request,db);
+  const response=json({ready:true});if(cookie)response.headers.set('Set-Cookie',cookie);return response;
+ }
+ if(path==='checkout'&&request.method==='POST'){
+  const input=await body(request);if(!['guest','account'].includes(input?.checkoutMode))fail(400,'Válassz vásárlási módot.');
+  const principal=input.checkoutMode==='guest'?await guestCheckoutAccess(request,db):user;
+  if(!principal?.userId||(input.checkoutMode==='account'&&!principal.email))fail(401,input.checkoutMode==='guest'?'A vendégpénztárhoz engedélyezd a szükséges sütiket, majd próbáld újra.':'A fiókkal vásárláshoz jelentkezz be.');
+  return await createCheckout(request,{...ctx,user:principal},config,input);
+ }
+ if(path==='claim-order'&&request.method==='POST'){
+  if(!user?.userId||!user?.email)fail(401,'A rendelés fiókhoz kapcsolásához jelentkezz be.');
+  const input=await body(request),guest=await guestCheckoutAccess(request,db);if(!guest)fail(403,'A vendégrendelés hozzáférése lejárt.');
+  const row=await q(db,"SELECT * FROM payment_checkouts WHERE session_id=? AND user_id=? AND status='paid'",typeof input?.sessionId==='string'?input.sessionId:'',guest.userId).first();if(!row){const own=await q(db,"SELECT id FROM payment_checkouts WHERE session_id=? AND user_id=? AND status='paid'",typeof input?.sessionId==='string'?input.sessionId:'',user.userId).first();if(own)return json({linked:true});fail(404,'A saját fizetett vendégrendelés nem található.');}
+  await customer(db,user);
+  await db.batch([
+   q(db,'UPDATE customer_orders SET user_id=? WHERE id=? AND user_id=?',user.userId,row.id,guest.userId),
+   q(db,'UPDATE payment_checkouts SET user_id=?,updated_at=? WHERE id=? AND user_id=?',user.userId,now(),row.id,guest.userId)
+  ]);const linked=await q(db,'SELECT user_id FROM payment_checkouts WHERE id=?',row.id).first();if(linked?.user_id!==user.userId)fail(409,'A rendelés kapcsolata időközben megváltozott.');return json({linked:true});
+ }
  if(path==='checkout-status'&&request.method==='GET'){
  const id=url.searchParams.get('session_id');if(!/^cs_[a-zA-Z0-9_]{1,200}$/.test(id||''))fail(400,'Hibás fizetésazonosító.');
- const row=await q(db,'SELECT * FROM payment_checkouts WHERE session_id=? AND user_id=?',id,user.userId).first();if(!row)fail(404,'A fizetés nem található.');
- if(row.status==='paid'){try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({status:'paid',orderId:row.id,mode:row.mode,items:JSON.parse(row.items_json)});}
+ const guest=await guestCheckoutAccess(request,db);
+ const row=await q(db,'SELECT * FROM payment_checkouts WHERE session_id=? AND (user_id=? OR user_id=?)',id,user?.userId||'',guest?.userId||'').first();if(!row)fail(404,'A fizetés nem található.');
+ if(row.status==='paid'){try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({status:'paid',orderId:row.id,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null});}
  if(!env.STRIPE_SECRET_KEY)fail(503,'A fizetés állapota most nem ellenőrizhető.');
  const session=await stripe(env,`checkout/sessions/${encodeURIComponent(id)}`,{fetcher:ctx.fetcher});const result=await applySession(db,row,session);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json(result);
  }
+ if(!user?.userId||!user?.email)fail(401,'Ehhez jelentkezz be a fiókodba.');
  if(path==='marketing'&&['GET','PUT'].includes(request.method))return await preferences(request,ctx,config);
  return json({error:'Nem található művelet.'},404);
  }catch(error){return json({error:error instanceof CommerceError?error.message:error?.status===403?'Eltérő eredetű kérés.':'A művelet most nem sikerült. Próbáld újra később.'},error instanceof CommerceError?error.status:error?.status===403?403:500);}

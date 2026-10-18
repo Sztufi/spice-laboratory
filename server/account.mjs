@@ -1,3 +1,4 @@
+import { shippingMethods, shippingQuote } from './shipping.mjs';
 import { catalogue } from '../public/catalogue.mjs';
 import { sanitizeCart, cartTotals } from '../public/shop-core.mjs';
 const productIds = new Set(catalogue.products.map(product => product.id));
@@ -46,7 +47,7 @@ async function accountData(db,user) {
     query(db,'SELECT full_name,phone,created_at,updated_at FROM customers WHERE id = ?',user.userId).first(),
     rows(db,'SELECT * FROM customer_addresses WHERE user_id = ?',user.userId),
     rows(db,'SELECT product_id FROM customer_favorites WHERE user_id = ? ORDER BY created_at',user.userId),
-    rows(db,'SELECT id,number,kind,status,total_minor,currency,items_json,created_at FROM customer_orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',user.userId),
+    rows(db,'SELECT id,number,kind,status,total_minor,currency,items_json,shipping_json,created_at FROM customer_orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',user.userId),
     rows(db,'SELECT id,number,issued_at,total_minor,currency,order_id FROM customer_invoices WHERE user_id = ? ORDER BY issued_at DESC LIMIT 100',user.userId),
     rows(db,'SELECT kind,status,created_at FROM customer_account_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',user.userId)
   ]);
@@ -55,13 +56,13 @@ async function accountData(db,user) {
     user:{ fullName:profile?.full_name ?? user.fullName ?? '', email:user.email, phone:profile?.phone ?? '' },
     addresses:Object.fromEntries(addressRows.map(row => [row.kind,addressDto(row)])),
     favorites:favoriteRows.map(row=>row.product_id).filter(id=>productIds.has(id)),
-    orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),createdAt:row.created_at })),
+    orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,createdAt:row.created_at })),
     invoices:invoiceRows.map(row=>({ id:row.id,number:row.number,issuedAt:row.issued_at,totalMinor:row.total_minor,currency:row.currency,orderId:row.order_id,downloadUrl:`/api/account/invoices/${encodeURIComponent(row.id)}/download` })),
     requests, capabilities:{ googleSignIn:false, liveOrders:false, invoiceIssuing:false },
     signInUrl:'/signin-with-chatgpt?return_to=%2F%23fiok', signOutUrl:'/signout-with-chatgpt?return_to=%2F'
   };
 }
-export async function handleAccountRequest(request,{db,bucket,user}) {
+export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
   try {
     const url = new URL(request.url);
     const route = url.pathname.replace(/^\/api\/account\/?/,'').split('/').filter(Boolean).map(part=>decodeURIComponent(part));
@@ -103,12 +104,15 @@ export async function handleAccountRequest(request,{db,bucket,user}) {
       if(!Array.isArray(body.items)||body.items.length>100)fail(400,'Hibás kosár.');
       const safe=sanitizeCart(body.items,catalogue.products);const total=cartTotals(safe,catalogue.products);
       if(!total.count||safe.length!==body.items.length)fail(400,'Üres vagy hibás kosár.');
+      const shipping=body.shipping?shippingQuote(shippingMethods(env),{country:body.shipping.country,methodId:body.shipping.shippingMethodId},total.totalMinor):null;
+      if(body.shipping&&!shipping)fail(400,'Érvénytelen szállítási mód.');
+      total.totalMinor+=shipping?.feeMinor||0;
       await ensureCustomer(db,user);
       const previous=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       if(previous)return json({saved:true,...previous});
       const id=crypto.randomUUID(),number=`DEMO-${id.slice(0,8).toUpperCase()}`;
       const items=total.lines.map(line=>({productId:line.id,name:line.product.name,quantity:line.quantity,priceMinor:line.product.priceMinor,subtotalMinor:line.subtotalMinor}));
-      await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString()).run();
+      await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null).run();
       const saved=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       return json({saved:true,...saved},201);
     }

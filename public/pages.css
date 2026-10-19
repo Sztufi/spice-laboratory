@@ -27,3 +27,4 @@
  .header-actions .cart-count{position:absolute;right:1px;top:1px;min-width:17px;height:17px;padding:1px 3px;border:0;font-size:9px;line-height:15px}
  .home-catalogue-link .secondary-button{width:100%}
 }
+.menu-item-icon{display:block;flex:0 0 26px;width:26px;height:26px;color:#000}

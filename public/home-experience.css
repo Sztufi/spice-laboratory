@@ -9,6 +9,26 @@ body[data-page=home] .hero h1{font-size:clamp(80px,9.1vw,142px);margin-bottom:24
 .hero-recipe-link{font-size:13px;min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-underline-offset:4px}
 .motion-toggle{display:inline-flex;align-items:center;min-height:32px;margin-top:12px;padding:0;background:transparent;border:0;border-bottom:1px solid #17130f44;color:#655b50;font:11px 'DM Sans',sans-serif;cursor:pointer}
 .motion-paused .hero *{animation-play-state:paused!important}
+/* Scroll-driven loop, no timer or continuous animation. Static without JS. */
+.hero-divider[data-scroll-marquee]{overflow:hidden;padding:32px 0}
+.hero-divider-track{display:flex;width:max-content}
+.hero-divider[data-scroll-marquee] .hero-divider-inner{flex:none;max-width:none;margin:0;gap:28px;padding:0 28px;white-space:nowrap}
+.hero-divider[data-scroll-marquee] p{font-size:clamp(28px,4vw,50px)}
+.hero-divider[data-scroll-marquee] svg{flex:none;width:44px;height:44px}
+.hero-divider[data-scroll-marquee] .divider-arrow{margin-left:24px}
+@media(max-width:800px){
+ .hero-divider[data-scroll-marquee]{padding:24px 0}
+ .hero-divider[data-scroll-marquee] .hero-divider-inner{gap:18px;padding:0 18px}
+ .hero-divider[data-scroll-marquee] svg{width:32px;height:32px}
+}
+@media(prefers-reduced-motion:reduce){
+ .hero-divider-track{transform:none!important}
+ .hero-divider-track>[aria-hidden=true]{display:none}
+ .hero-divider[data-scroll-marquee] .hero-divider-inner{width:100vw;white-space:normal}
+}
+.motion-paused .hero-divider-track{transform:none!important}
+.motion-paused .hero-divider-track>[aria-hidden=true]{display:none}
+.motion-paused .hero-divider[data-scroll-marquee] .hero-divider-inner{width:100vw;white-space:normal}
 body[data-page=home] .eyebrow{letter-spacing:2px;margin-bottom:24px}
 body[data-page=home] .shop-heading{align-items:end;margin-bottom:30px}
 body[data-page=home] .shop-intro{max-width:39ch;font-size:14px;line-height:1.7}

@@ -2,6 +2,8 @@ import { openAccount,favoriteButtonMarkup } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
 import {purchaseQuantity,purchaseCost} from './product-purchase.mjs';
 import {formatMoney} from './money.mjs';
+import {mountScrollMarquee} from './scroll-marquee.mjs';
+for(const band of document.querySelectorAll('[data-scroll-marquee]'))mountScrollMarquee(band);
 function paintFavorites(){
  for(const button of document.querySelectorAll('[data-favorite]')){
   if(button.closest('#product-grid')||button.closest('#account-dialog'))continue;
@@ -22,6 +24,7 @@ document.querySelector('[data-toggle-motion]')?.addEventListener('click',event=>
  const paused=document.body.classList.toggle('motion-paused');
  event.currentTarget.setAttribute('aria-pressed',String(paused));
  event.currentTarget.textContent=paused?'Animáció folytatása':'Animáció szüneteltetése';
+ window.dispatchEvent(new Event('spice:motion-change'));
 });
 
 // A single quantity source powers both purchase buttons. No external CRO scripts.

@@ -1,4 +1,5 @@
 import { productCard } from './product-markup.mjs';
+import {ingredientDetails} from './ingredient-copy.mjs';
 import { categoryPath } from './page-data.mjs';
 import { renderCheckout, checkoutSelection, shippingOverview } from './checkout.mjs';
 import { commerceApi } from './commerce.mjs';
@@ -146,19 +147,13 @@ function showProduct(id) {
     <img class="product-detail-image" src="${escape(product.image)}" width="500" height="500" alt="${escape(product.name)} fűszerkeverék">
     <p class="detail-kicker">${escape(product.subtitle)}</p><h2 id="detail-title">${escape(product.name)}</h2>
     <p class="detail-description">${escape(product.description)}</p>
-    <a class="text-button full-product-link" href="/termek/${escape(product.id)}">Teljes termékoldal →</a>
+    <a class="text-button full-product-link" href="/termek/${escape(product.id)}">Minden a keverékről →</a>
     <div class="detail-meta"><span>Kiszerelés: ${product.weightGrams} g</span><strong>${money(product.priceMinor)}</strong></div>
     ${shippingOverview(getCommerceConfig(),product.priceMinor)}
     <h3 class="ingredient-title">MI VAN BENNE? · ${product.ingredients.length} ÖSSZETEVŐ</h3>
-    <div class="ingredient-chips">${product.ingredients.map(item => `<button class="ingredient-tag" type="button" data-filter-ingredient="${escape(item.id)}" title="${escape(item.sourceLabel)}" aria-label="Szűrés erre az összetevőre: ${escape(label(item.id))}">${escape(label(item.id))}</button>`).join('')}</div>
+    <div class="ingredient-chips">${product.ingredients.map(item => `<button class="ingredient-tag" type="button" data-filter-ingredient="${escape(item.id)}" title="${escape(label(item.id))}" aria-label="Szűrés erre az összetevőre: ${escape(label(item.id))}">${escape(label(item.id))}</button>`).join('')}</div>
     <p class="ingredient-hint">Koppints egy összetevőre, és nézd meg, melyik másik keverékben találod meg.</p>
-    <details class="source-details"><summary>Eredeti összetevőlista és adatforrás</summary>
-      <p lang="ro">${escape(product.sourceIngredientText)}</p>
-      ${product.sourceConflict ? `<div class="source-discrepancy"><strong>Eltérő adatok az eredeti oldalon.</strong><br>A fenti lista a termékoldal látható „Ingrediente” részéből származik. A webáruház termékattribútuma ettől eltér:<p lang="ro">${escape(product.sourceAttributeIngredientText)}</p></div>` : ''}
-      ${product.traceStatementOriginal ? `<p>Nyomokban tartalmazhat – eredeti forrásszöveg:<br><span lang="ro">${escape(product.traceStatementOriginal)}</span></p>` : ''}
-      <p>A szűrő az összetevőlistán alapul, a nyomokban előforduló allergéneket nem értékeli. Ételallergia esetén az aktuális termékcímkét ellenőrizd.</p>
-      ${product.sourceUrl?`<a href="${escape(product.sourceUrl)}" target="_blank" rel="noopener noreferrer">Eredeti termékoldal ↗</a>`:''}
-    </details>`;
+    ${ingredientDetails(product)}`;
   $('#product-detail-footer').innerHTML = `<button class="primary-button yellow" type="button" data-action="add" data-id="${escape(id)}"${product.inStock===false?' disabled':''}>${product.inStock===false?'NEM ELÉRHETŐ':'KOSÁRBA'} · ${money(product.priceMinor)} ${icon('plus')}</button>`;
   $('#product-detail').scrollTop = 0;
   openDialog('product-dialog');
@@ -189,7 +184,7 @@ function renderCart() {
   $('#cart-title').textContent = count ? `A KOSARAD (${count})` : 'A KOSARAD';
   $('#cart-footer').hidden = !count;
   if (!count) {
-    $('#cart-content').innerHTML = `<div class="cart-empty">${icon('bag', 60)}<h3>EGY CSIPET HIÁNYZIK.</h3><p>Még üres a kosarad. Keress egy keveréket, ami feldobja a következő fogást.</p><button class="secondary-button" type="button" data-action="continue">Fűszerek felfedezése ↗</button></div>`;
+    $('#cart-content').innerHTML = `<div class="cart-empty">${icon('bag', 60)}<h3>IDE MÉG KELL EGY KIS ÍZ.</h3><p>Még üres a kosarad. Nézz ki egy keveréket a következő kajádhoz, és tedd ide.</p><button class="secondary-button" type="button" data-action="continue">MUTASD A FŰSZEREKET ↗</button></div>`;
     $('#cart-footer').innerHTML = '';
     return;
   }
@@ -237,7 +232,7 @@ async function completeDemoOrder(event) {
   persistCart();
   cartView = 'confirmation';
   $('#cart-title').textContent = 'PRÓBA TELJESÍTVE';
-  $('#cart-content').innerHTML = `<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>EZ MÁR<br>JÓL KEVEREDIK.</h3><p>A próbavásárlás sikerült.<br>Nem történt fizetés, és nem adtunk le valódi rendelést.</p><div class="confirmation-total">${count} termék · ${money(totalMinor)}</div><p>${archived?.saved ? 'A próbavásárlást megtalálod a fiókod rendelései között.' : 'A kosarad kiürült. Kipróbálhatsz egy új összeállítást is.'}</p>${archived?.saved ? '<button class="text-button" type="button" data-open-orders>Próbavásárlás megtekintése →</button>' : ''}<button class="primary-button" type="button" data-action="continue">VISSZA A FŰSZEREKHEZ ↗</button></div>`;
+  $('#cart-content').innerHTML = `<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>A PRÓBA KÉSZ.<br>A FŐZÉS MÉG RÁÉR.</h3><p>A próbavásárlás sikerült.<br>Nem történt fizetés, és nem adtunk le valódi rendelést.</p><div class="confirmation-total">${count} termék · ${money(totalMinor)}</div><p>${archived?.saved ? 'A próbavásárlást megtalálod a fiókod rendelései között.' : 'A kosarad kiürült. Kipróbálhatsz egy új összeállítást is.'}</p>${archived?.saved ? '<button class="text-button" type="button" data-open-orders>Próbavásárlás megtekintése →</button>' : ''}<button class="primary-button" type="button" data-action="continue">VISSZA A FŰSZEREKHEZ ↗</button></div>`;
   $('#cart-footer').hidden = true;
   $('#cart-content').scrollTop = 0;
   $('#cart-content [data-action="continue"]').focus({ preventScroll: true });
@@ -363,7 +358,7 @@ initCommerce(async result=>{
   persistCart();try{localStorage.setItem('spice-lab:completed-payments:v1',JSON.stringify([...new Set([...completed,result.orderId])].slice(-50)));}catch{}renderCart();cartView='confirmation';
   window.dispatchEvent(new CustomEvent('spice:account-refresh'));
   $('#cart-title').textContent=result.mode==='test'?'TESZTFIZETÉS SIKERÜLT':'FIZETÉS SIKERÜLT';
-  $('#cart-content').innerHTML=`<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>KÖSZÖNJÜK<br>A RENDELÉST!</h3><p>${result.mode==='test'?'A Stripe tesztfizetést visszaigazoltuk. Nem történt valódi pénzmozgás.':'A Stripe visszaigazolta a fizetésedet.'}</p><p>${result.guest?'A vendégrendelésedet külön hozzákapcsolhatod a fiókodhoz.':'A rendelés a saját fiókodban is megtalálható.'} A fizetési visszaigazolás nem számla.</p>${result.shipping?`<p>${escape(result.shipping.label)} · ${money(result.shipping.feeMinor)}<br>Várható kézbesítés: ${result.shipping.deliveryMinDays}–${result.shipping.deliveryMaxDays} munkanap</p>`:''}${result.guest?'<p>Vendégként vásároltál. A fiók létrehozása opcionális.</p><button class="secondary-button" type="button" id="claim-guest-order">RENDELÉS HOZZÁADÁSA A FIÓKOMHOZ →</button><p id="claim-order-status" role="status"></p>':'<button class="primary-button yellow" type="button" data-open-orders>RENDELÉSEIM →</button>'}</div>`;
+  $('#cart-content').innerHTML=`<div class="confirmation"><div class="confirmation-mark" aria-hidden="true">✓</div><h3>${result.mode==='test'?'A TESZTFIZETÉS SIKERÜLT.':'EZ JÓ VÁLASZTÁS VOLT.<br>KÖSZÖNJÜK A RENDELÉST!'}</h3><p>${result.mode==='test'?'A Stripe tesztfizetést visszaigazoltuk. Nem történt valódi pénzmozgás.':'A Stripe visszaigazolta a fizetésedet.'}</p><p>${result.guest?'A vendégrendelésedet külön hozzákapcsolhatod a fiókodhoz.':'A rendelés a saját fiókodban is megtalálható.'} A fizetési visszaigazolás nem számla.</p>${result.shipping?`<p>${escape(result.shipping.label)} · ${money(result.shipping.feeMinor)}<br>Várható kézbesítés: ${result.shipping.deliveryMinDays}–${result.shipping.deliveryMaxDays} munkanap</p>`:''}${result.guest?'<p>Vendégként vásároltál. A fiók létrehozása opcionális.</p><button class="secondary-button" type="button" id="claim-guest-order">RENDELÉS HOZZÁADÁSA A FIÓKOMHOZ →</button><p id="claim-order-status" role="status"></p>':'<button class="primary-button yellow" type="button" data-open-orders>RENDELÉSEIM →</button>'}</div>`;
   $('#cart-footer').hidden=true;openDialog('cart-dialog');
   $('#claim-guest-order')?.addEventListener('click',async event=>{
    const button=event.currentTarget;button.disabled=true;const status=$('#claim-order-status');

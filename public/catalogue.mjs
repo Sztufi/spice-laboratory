@@ -80,7 +80,7 @@ export const seedCatalogue = {
     },
     {
       "id": "chives",
-      "label": "Arpagic"
+      "label": "Metélőhagyma"
     },
     {
       "id": "raw-sugar",
@@ -184,7 +184,7 @@ export const seedCatalogue = {
       "name": "Rooster Booster",
       "sourceName": "Condiment Grill Pentru Pui, Rooster Booster 160g",
       "subtitle": "Grillfűszer csirkéhez",
-      "description": "Fűszeres, édeskés, citrusos keverék csirkéhez és grillételekhez.",
+      "description": "Csirke lesz? Adj neki édeskés, citrusos, fűszeres irányt. A Rooster Booster csirkéhez és grillételekhez való.",
       "categories": [
         "bbq"
       ],
@@ -264,7 +264,7 @@ export const seedCatalogue = {
       "name": "Fries Salt",
       "sourceName": "Condiment Pentru Cartofi Prăjiți, Fries Salt 210g",
       "subtitle": "Fűszersó sült krumplihoz",
-      "description": "Sós, füstös keverék sült krumplihoz, burgonyagerezdekhez és snackekhez.",
+      "description": "A krumpli ne csak köret legyen. Sós, füstös keverék sült krumplihoz, burgonyagerezdekhez és snackekhez.",
       "categories": [
         "topping"
       ],
@@ -320,7 +320,7 @@ export const seedCatalogue = {
       "name": "GRR Lick!",
       "sourceName": "Condiment Mix Pentru Dip Usturoi, GRR Lick! 130g",
       "subtitle": "Fokhagymás mártogatóalap",
-      "description": "Fokhagyma, hagyma és zöldfűszerek. Keverd joghurtba, tejfölbe vagy majonézbe.",
+      "description": "Fokhagyma az előtérben, hagyma és zöldfűszerek mellette. Keverd joghurtba, tejfölbe vagy majonézbe. Aztán márts bele.",
       "categories": [
         "dip"
       ],
@@ -372,7 +372,7 @@ export const seedCatalogue = {
       "name": "Redneck Dust",
       "sourceName": "Condiment BBQ Dry Rub, Redneck Dust 160g",
       "subtitle": "Amerikai BBQ dry rub",
-      "description": "Édes, csípős és füstös keverék oldalashoz, pulled porkhoz és lassú sütéshez.",
+      "description": "Édes, csípős, füstös. A Redneck Dust oldalashoz, pulled porkhoz és lassú sütéshez hozza a BBQ-vonalat.",
       "categories": [
         "bbq"
       ],
@@ -440,7 +440,7 @@ export const seedCatalogue = {
       "name": "Crisps & Kick",
       "sourceName": "Condiment Bagel, Crisps & Kick 140g",
       "subtitle": "Ropogós bagel fűszerkeverék",
-      "description": "Szezámmag, kék mák és pirított hagyma salátákra, levesekre és tésztákhoz.",
+      "description": "A végén jön a roppanás. Szezámmag, kék mák és pirított hagyma salátákra, levesekre és tésztákra.",
       "categories": [
         "topping"
       ],
@@ -492,7 +492,7 @@ export const seedCatalogue = {
       "name": "Bull’s Blaze",
       "sourceName": "Condiment Pentru Steak Și Vită, Bull’s Blaze 160g",
       "subtitle": "Steak- és marhahúsfűszer",
-      "description": "Borsos, aromás keverék steakhez, marhaoldalashoz és grillezéshez.",
+      "description": "Marha a grillen? A Bull’s Blaze borsos, aromás keverék steakhez, marhaoldalashoz és grillezéshez.",
       "categories": [
         "bbq"
       ],
@@ -560,7 +560,7 @@ export const seedCatalogue = {
       "name": "Chimichurri",
       "sourceName": "Condiment Mix Argentinian, Chimichurri 100gr",
       "subtitle": "Argentin fűszerkeverék",
-      "description": "Hagymás, zöldfűszeres keverék húshoz, halhoz és zöldségekhez. Olajjal és ecettel szószként is elkészíthető.",
+      "description": "Hagymás, zöldfűszeres irány húshoz, halhoz és zöldségekhez. Olajjal és ecettel szószt is keverhetsz belőle. Kanalazd rá, ne csak mellé tedd.",
       "categories": [
         "international"
       ],
@@ -624,7 +624,7 @@ export const seedCatalogue = {
       "name": "Grill Salt",
       "sourceName": "Condiment Pentru Grătar, Grill Salt 180g",
       "subtitle": "Fűszersó grillezéshez",
-      "description": "Tengeri só, paprika és fűszerek húsokhoz, zöldségekhez és sütőben sült burgonyához.",
+      "description": "Grillrács vagy sütőtepsi? Mindkettő játszik. Tengeri só, paprika és fűszerek húsokhoz, zöldségekhez és sült burgonyához.",
       "categories": [
         "bbq"
       ],
@@ -684,7 +684,7 @@ export const seedCatalogue = {
       "name": "Cajun Mix",
       "sourceName": "Condiment de stil Louisiana, Cajun Mix 140g",
       "subtitle": "Louisianai fűszerkeverék",
-      "description": "Paprikás, fokhagymás cajun keverék húsokhoz, halakhoz és zöldségekhez.",
+      "description": "Louisianai irány a saját konyhádban. Paprikás, fokhagymás cajun keverék húsokhoz, halakhoz és zöldségekhez.",
       "categories": [
         "international",
         "bbq"
@@ -757,7 +757,7 @@ export const seedCatalogue = {
       "name": "Sweet Onion",
       "sourceName": "Condiment Mix Sweet Onion, Dip Cu Ceapa Prajita 150g",
       "subtitle": "Pirított hagymás mártogatóalap",
-      "description": "Hagymás keverék krémes mártogatósokhoz. Joghurtba, tejfölbe vagy majonézbe keverhető.",
+      "description": "Pirított hagymás, krémes mártogatósra mennél? Keverd joghurtba, tejfölbe vagy majonézbe. A Sweet Onion innen viszi tovább.",
       "categories": [
         "dip"
       ],

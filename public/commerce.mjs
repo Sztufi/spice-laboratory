@@ -20,7 +20,7 @@ async function refreshMarketing(){
  const form=document.querySelector('#newsletter-form'),status=document.querySelector('#newsletter-status');if(!form||!status)return;
  const submit=form.querySelector('button');
  submit.disabled=!config.newsletterEnabled;
- status.textContent=config.newsletterEnabled?'Bejelentkezés nélkül is feliratkozhatsz.':'A hírlevél hamarosan indul. A feliratkozás még nem aktív.';
+ status.textContent=config.newsletterEnabled?'Jöhetnek az ötletek. Fiók nem kell hozzá.':'A hírlevél hamarosan indul. A feliratkozás még nem aktív.';
 }
 export async function initCommerce(onPayment){
  document.querySelector('#newsletter-form')?.addEventListener('submit',async event=>{
@@ -31,7 +31,7 @@ export async function initCommerce(onPayment){
   button.disabled=true;status.textContent='Feliratkozás…';
   try{
    const data=await commerceApi('newsletter',{method:'POST',body:JSON.stringify({email:email.value,consent:check.checked,consentVersion:config.consentVersion,website:document.querySelector('#newsletter-website')?.value||''})});
-   status.textContent=data.synced?'Köszönjük a feliratkozást! Az e-mailekben bármikor leiratkozhatsz.':'A kérésedet elmentettük, de az Omnisend még nem igazolta vissza. Próbáld újra később.';
+   status.textContent=data.synced?'Benne vagy! Receptek és újdonságok jönnek. Leiratkozás minden levélben.':'A kérésedet elmentettük, de az Omnisend még nem igazolta vissza. Próbáld újra később.';
    if(data.synced){email.value='';check.checked=false;}
   }catch(error){status.textContent=error.message;}
   finally{button.disabled=!config.newsletterEnabled;}

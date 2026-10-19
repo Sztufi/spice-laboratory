@@ -1,3 +1,4 @@
+import {refundColumns,refundSummary} from './refunds.mjs';
 import { shippingMethods, shippingQuote } from './shipping.mjs';
 import { seedCatalogue } from '../public/catalogue.mjs';
 import {loadStore,runtimeEnv,assertAvailable,couponQuote} from './store.mjs';
@@ -48,7 +49,7 @@ async function accountData(db,user,catalogue=seedCatalogue) {
     query(db,'SELECT full_name,phone,created_at,updated_at FROM customers WHERE id = ?',user.userId).first(),
     rows(db,'SELECT * FROM customer_addresses WHERE user_id = ?',user.userId),
     rows(db,'SELECT product_id FROM customer_favorites WHERE user_id = ? ORDER BY created_at',user.userId),
-    rows(db,'SELECT o.*,ops.fulfillment_status,ops.tracking_url FROM customer_orders o LEFT JOIN store_order_operations ops ON ops.order_id=o.id WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 100',user.userId),
+    rows(db,`SELECT o.*,${refundColumns()},ops.fulfillment_status,ops.tracking_url FROM customer_orders o LEFT JOIN store_order_operations ops ON ops.order_id=o.id WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 100`,user.userId),
     rows(db,'SELECT id,number,issued_at,total_minor,currency,order_id FROM customer_invoices WHERE user_id = ? ORDER BY issued_at DESC LIMIT 100',user.userId),
     rows(db,'SELECT kind,status,created_at FROM customer_account_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',user.userId)
   ]);
@@ -57,7 +58,7 @@ async function accountData(db,user,catalogue=seedCatalogue) {
     user:{ fullName:profile?.full_name ?? user.fullName ?? '', email:user.email, phone:profile?.phone ?? '' },
     addresses:Object.fromEntries(addressRows.map(row => [row.kind,addressDto(row)])),
     favorites:favoriteRows.map(row=>row.product_id).filter(id=>productIds.has(id)),
-    orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,fulfillmentStatus:row.fulfillment_status||null,trackingUrl:row.tracking_url||null,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,discount:row.discount_json?JSON.parse(row.discount_json):null,createdAt:row.created_at })),
+    orders:orderRows.map(row=>({ ...refundSummary(row),id:row.id,number:row.number,kind:row.kind,status:row.status,fulfillmentStatus:row.fulfillment_status||null,trackingUrl:row.tracking_url||null,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,discount:row.discount_json?JSON.parse(row.discount_json):null,createdAt:row.created_at })),
     invoices:invoiceRows.map(row=>({ id:row.id,number:row.number,issuedAt:row.issued_at,totalMinor:row.total_minor,currency:row.currency,orderId:row.order_id,downloadUrl:`/api/account/invoices/${encodeURIComponent(row.id)}/download` })),
     requests, capabilities:{ googleSignIn:user.provider==='google', liveOrders:false, invoiceIssuing:false },
     signInUrl:'/signin-with-chatgpt?return_to=%2F%23fiok', signOutUrl:'/signout-with-chatgpt?return_to=%2F'

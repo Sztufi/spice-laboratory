@@ -57,6 +57,13 @@
       "when": 1792412814042,
       "tag": "0007_jittery_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792414940048,
+      "tag": "0008_oval_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

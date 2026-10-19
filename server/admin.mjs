@@ -1,6 +1,8 @@
 import {loadStore,query as q,all,StoreError,fail,text,slug,imageUrl,recordDefaults,isStoreAdmin,runtimeEnv} from './store.mjs';
 import {shippingMethods} from './shipping.mjs';
 import {analyticsEndpoint} from './admin-analytics.mjs';
+import {refundColumns,refundSummary} from './refunds.mjs';
+import {sendWithdrawalReceipt,withdrawalMailReady} from './withdrawals.mjs';
 import {seoState,seoSetting} from './seo.mjs';
 import {seoPages} from '../public/seo-data.mjs';
 import {processImage} from './image-processing.mjs';
@@ -90,13 +92,13 @@ async function save(db,user,kind,data,isNew){
 async function overview(db,user,env){
  const [store,orders,customers,subscribers,auditRows]=await Promise.all([
   loadStore(db,{admin:true}),
-  all(db,`SELECT o.*,c.email,c.full_name,c.phone,p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id ORDER BY o.created_at DESC LIMIT 200`),
+  all(db,`SELECT o.*,${refundColumns()},c.email,c.full_name,c.phone,p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id ORDER BY o.created_at DESC LIMIT 200`),
   all(db,`SELECT c.id,c.email,c.full_name,c.phone,c.created_at,COUNT(o.id) AS order_count FROM customers c LEFT JOIN customer_orders o ON o.user_id=c.id GROUP BY c.id ORDER BY c.created_at DESC LIMIT 200`),
   all(db,'SELECT email,status,created_at,updated_at FROM newsletter_subscribers ORDER BY created_at DESC LIMIT 200'),
   all(db,'SELECT action,entity,entity_id,created_at FROM store_admin_audit ORDER BY created_at DESC LIMIT 50')
  ]);
- const totals=await q(db,"SELECT COUNT(*) AS orders,COALESCE(SUM(total_minor),0) AS revenue FROM customer_orders WHERE kind='stripe' AND status='paid'").first();
- return {user:{email:user.email,name:user.fullName||user.email},...store,orders:orders.map(row=>({...row,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
+ const totals=await q(db,"SELECT COUNT(*) AS orders,COALESCE(SUM(total_minor),0) AS revenue,(SELECT COALESCE(SUM(r.amount_minor),0) FROM payment_refunds r JOIN customer_orders o ON o.id=r.checkout_id WHERE r.status='succeeded' AND o.kind='stripe' AND o.status='paid' AND o.currency='HUF') AS refunded FROM customer_orders WHERE kind='stripe' AND status='paid' AND currency='HUF'").first();
+ return {user:{email:user.email,name:user.fullName||user.email},...store,orders:orders.map(row=>({...row,...refundSummary(row),items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
 }
 async function upload(request,{db,bucket,user}){
  if(!bucket)fail(503,'A képtár nem érhető el.');
@@ -126,6 +128,18 @@ export async function handleAdminRequest(request,ctx){
   if(!db)fail(503,'Az adminisztráció adatbázisa nem érhető el.');
   if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
   const parts=new URL(request.url).pathname.replace(/^\/api\/admin\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
+  if(parts[0]==='withdrawals'){
+   if(request.method==='GET'){
+    const page=Math.floor(Math.max(1,Math.min(1000000,Number(new URL(request.url).searchParams.get('page'))||1)));
+    const rows=await all(db,'SELECT * FROM customer_withdrawals ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?',(page-1)*50);
+    const count=await q(db,'SELECT COUNT(*) AS total FROM customer_withdrawals').first();
+    return json({requests:rows,page,total:count.total,mailReady:withdrawalMailReady(env)});
+   }
+   if(request.method==='POST'&&parts.length===3&&parts[2]==='receipt'){
+    const row=await q(db,'SELECT * FROM customer_withdrawals WHERE id=?',parts[1]).first();if(!row)fail(404,'Nincs ilyen nyilatkozat.');
+    const sent=row.email_status==='sent'||await sendWithdrawalReceipt(db,row,env,ctx.fetcher);return json({sent},sent?200:202);
+   }
+  }
   if(request.method==='GET'&&!parts.length)return json(await overview(db,user,env));
   if(request.method==='GET'&&(['analytics','archive'].includes(parts[0])||parts[0]==='export'&&['orders','order-lines','archive'].includes(parts[1])))return await analyticsEndpoint(request,db,parts);
   if(request.method==='GET'&&parts[0]==='customers'&&parts.length===2){

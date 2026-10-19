@@ -54,13 +54,26 @@ export const checkouts = sqliteTable('payment_checkouts', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), requestId: text('request_id').notNull(),
   fingerprint: text('fingerprint').notNull(), itemsJson: text('items_json').notNull(), totalMinor: integer('total_minor').notNull(),
   currency: text('currency').notNull(), mode: text('mode').notNull(), status: text('status').notNull().default('creating'),
-  sessionId: text('session_id'), sessionUrl: text('session_url'), expiresAt: integer('expires_at'),
+  sessionId: text('session_id'), paymentIntentId:text('payment_intent_id'), sessionUrl: text('session_url'), expiresAt: integer('expires_at'),
   shippingJson:text('shipping_json'),discountJson:text('discount_json'),
   customerJson: text('customer_json'), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
 }, table => [uniqueIndex('checkout_user_request').on(table.userId,table.requestId),uniqueIndex('checkout_session').on(table.sessionId)]);
 export const paymentEvents = sqliteTable('payment_events', {
   id:text('id').primaryKey(), checkoutId:text('checkout_id').notNull().references(()=>checkouts.id), type:text('type').notNull(), createdAt:text('created_at').notNull()
 });
+export const refunds=sqliteTable('payment_refunds',{
+ id:text('id').primaryKey(),checkoutId:text('checkout_id').notNull().references(()=>checkouts.id),chargeId:text('charge_id').notNull(),
+ amountMinor:integer('amount_minor').notNull(),currency:text('currency').notNull(),mode:text('mode').notNull(),status:text('status').notNull(),
+ reason:text('reason'),createdAt:text('created_at').notNull(),succeededAt:text('succeeded_at'),updatedAt:text('updated_at').notNull()
+},table=>[index('refund_checkout').on(table.checkoutId),index('refund_success_date').on(table.succeededAt,table.id)]);
+export const withdrawals=sqliteTable('customer_withdrawals',{
+ id:text('id').primaryKey(),requestId:text('request_id').notNull(),name:text('name').notNull(),email:text('email').notNull(),
+ orderReference:text('order_reference').notNull(),content:text('content').notNull(),createdAt:text('created_at').notNull(),
+ emailStatus:text('email_status').notNull().default('pending'),status:text('status').notNull().default('pending')
+},table=>[uniqueIndex('withdrawal_request').on(table.requestId),index('withdrawal_date').on(table.createdAt,table.id)]);
+export const withdrawalThrottle=sqliteTable('withdrawal_throttle',{
+ id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
+},table=>[index('withdrawal_throttle_expiry').on(table.expiresAt)]);
 export const marketingPreferences = sqliteTable('marketing_preferences', {
   userId:text('user_id').primaryKey().references(()=>customers.id), email:text('email').notNull(), status:text('status').notNull(),
   consentVersion:text('consent_version').notNull(), changedAt:text('changed_at').notNull(), syncStatus:text('sync_status').notNull(),

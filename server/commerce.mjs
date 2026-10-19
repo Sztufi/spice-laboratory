@@ -4,6 +4,8 @@ import {loadStore,runtimeEnv,assertAvailable,reserveStock,stockSettlementStateme
 import {subscribeNewsletter} from './newsletter.mjs';
 import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
+import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
+import {handleWithdrawal,withdrawalMailReady} from './withdrawals.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -15,7 +17,8 @@ export function commerceConfig(env={}) {
  const mode=env.STRIPE_MODE==='live'?'live':'test';
  const methods=shippingMethods(env);
  const configured=env.STRIPE_ENABLED==='true' && typeof env.STRIPE_SECRET_KEY==='string' && env.STRIPE_SECRET_KEY.startsWith(`sk_${mode}_`) && !!env.STRIPE_WEBHOOK_SECRET && env.STRIPE_WEBHOOK_READY==='true' && methods.length>0 && env.MERCHANT_PRICES_APPROVED==='true';
- return {stripeEnabled:configured,mode,shippingMethods:methods,shippingCountries:SHIPPING_COUNTRIES,newsletterEnabled:!!env.OMNISEND_API_KEY&&env.OMNISEND_ENABLED==='true',consentVersion:CONSENT_VERSION,consentText:CONSENT_TEXT};
+ const legalReady=env.LEGAL_LAUNCH_APPROVED==='true'&&withdrawalMailReady(env);
+ return {stripeEnabled:configured&&(mode!=='live'||legalReady),legalReady,withdrawalEmailReady:withdrawalMailReady(env),mode,shippingMethods:methods,shippingCountries:SHIPPING_COUNTRIES,newsletterEnabled:!!env.OMNISEND_API_KEY&&env.OMNISEND_ENABLED==='true',consentVersion:CONSENT_VERSION,consentText:CONSENT_TEXT};
 }
 async function readLimited(request,limit){
  if(Number(request.headers.get('content-length')||0)>limit)fail(413,'Túl nagy kérés.');
@@ -73,6 +76,7 @@ async function createCheckout(request,ctx,config,input){
  const origin=new URL(request.url).origin;
  const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':shipping.country,success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
  if(user.email)params.set('customer_email',user.email);
+ params.set('payment_intent_data[metadata][checkout_id]',row.id);
  if(discount){
   const coupon=await stripe(env,'coupons',{params:new URLSearchParams({duration:'once',currency:catalogue.currency.toLowerCase(),amount_off:String(discount.discountMinor),name:discount.code}),key:`spice-coupon-${row.id}`,fetcher});
   if(typeof coupon.id!=='string'||coupon.id.length>200)fail(502,'Nem sikerült a kedvezményt érvényesíteni.');
@@ -90,7 +94,10 @@ async function applySession(db,row,session,eventId,eventType){
  if(session.id!==row.session_id||session.metadata?.checkout_id!==row.id||session.client_reference_id!==row.id||session.livemode!==(row.mode==='live')||session.amount_total!==row.total_minor||session.currency?.toUpperCase()!==row.currency)fail(400,'A fizetési adatok nem egyeznek.');
  const paid=(session.payment_status==='paid'||session.payment_status==='no_payment_required'&&row.total_minor===0)&&session.status==='complete';
  const status=paid?'paid':session.status==='expired'?'expired':'open';
+ const pi=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
+ if(pi&&(!/^pi_[a-zA-Z0-9_]{1,200}$/.test(pi)||row.payment_intent_id&&row.payment_intent_id!==pi))fail(400,'Eltérő fizetésazonosító.');
  const statements=[q(db,"UPDATE payment_checkouts SET status=CASE WHEN status='paid' THEN status ELSE ? END, customer_json=COALESCE(?,customer_json),updated_at=? WHERE id=?",status,paid?JSON.stringify({billing:session.customer_details,shipping:session.collected_information?.shipping_details??session.shipping_details??null}):null,now(),row.id)];
+ if(pi)statements.push(q(db,'UPDATE payment_checkouts SET payment_intent_id=? WHERE id=?',pi,row.id));
  if(paid){
  const number=`SL-${row.id.slice(0,8).toUpperCase()}`;
  statements.push(q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',row.id,row.user_id,`stripe:${row.id}`,number,row.mode==='live'?'stripe':'stripe-test','paid',row.total_minor,row.currency,row.items_json,now(),row.shipping_json,row.discount_json||null));
@@ -144,14 +151,16 @@ export async function handleCommerceRequest(request,ctx){
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stripe-webhook'&&request.method==='POST'){
  const raw=await readLimited(request,262144);const event=await verifyStripeEvent(raw,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
- if(!['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired'].includes(event.type))return json({received:true});
+ if(!['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired',...REFUND_EVENTS].includes(event.type))return json({received:true});
  if(!event.id?.startsWith('evt_'))fail(400,'Hibás esemény.');
  if(await q(db,'SELECT id FROM payment_events WHERE id=?',event.id).first())return json({received:true});
+ if(REFUND_EVENTS.includes(event.type)){await syncRefundEvent(db,event,path=>stripe(env,path,{fetcher:ctx.fetcher}));return json({received:true});}
  const session=event.data?.object;const row=await q(db,'SELECT * FROM payment_checkouts WHERE session_id=?',session?.id??'').first();
  if(!row)return json({received:true,ignored:true});
  await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({received:true});
  }
  if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
+ if(path==='withdrawal'&&request.method==='POST')return await handleWithdrawal(request,ctx);
  if(path==='newsletter'&&request.method==='POST'){
   const result=await subscribeNewsletter(request,ctx,config,CONSENT_TEXT);return json(result,result.synced?200:202);
  }

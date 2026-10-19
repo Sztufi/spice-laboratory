@@ -30,7 +30,7 @@ test('paid summaries reconcile discounts/shipping, exclude demo/test/currency, u
  assert.equal(r.totals.orders,2);assert.equal(r.totals.grossMinor,40000);assert.equal(r.totals.discountMinor,3000);assert.equal(r.totals.productMinor,37000);assert.equal(r.totals.shippingMinor,1000);assert.equal(r.totals.paidMinor,38000);
  assert.equal(r.totals.aovProductMinor,18500);assert.equal(r.totals.returningCustomers,1);assert.equal(r.totals.newCustomers,1);assert.equal(r.totals.returningRate,.5);
  assert.equal(r.customers.find(c=>c.email==='a@example.com').lifetimeOrders,2);assert.equal(r.timeline.length,3);assert.equal(r.timeline[2].orders,0);assert.equal(r.products[0].units,4);
- assert.equal(r.coverage.excludedCurrency,1);assert.equal(r.coverage.refundsAvailable,false);
+ assert.equal(r.coverage.excludedCurrency,1);assert.equal(r.coverage.refundsAvailable,true);
  const week=await (await call(db,'/analytics?from=2026-10-01&to=2026-10-03&group=week')).json();assert.equal(week.timeline[0].period,'2026-09-28');assert.equal(week.totals.paidMinor,r.totals.paidMinor);
  const month=await (await call(db,'/analytics?from=2026-10-01&to=2026-10-03&group=month')).json();assert.equal(month.timeline[0].period,'2026-10');
 });
@@ -65,7 +65,7 @@ test('archive pagination, detail and streaming CSV/JSON include more than 200 or
  const detail=await call(db,'/archive/order-000');assert.equal(detail.status,200);assert.equal((await detail.json()).items[0].quantity,2);
  const csv=await call(db,'/export/orders');const text=await csv.text();assert.equal(text.trim().split('\r\n').length,216);assert.ok(text.includes("'=SUM(1)@example.com"));assert.match(csv.headers.get('cache-control'),/no-store/);
  const lines=await (await call(db,'/export/order-lines')).text();assert.equal(lines.trim().split('\r\n').length,216);assert.ok(lines.includes('Fries Salt'));
- const archive=await (await call(db,'/export/archive')).json();assert.equal(archive.orders.length,215);assert.equal(archive.schemaVersion,1);assert.ok(!JSON.stringify(archive).includes('session_url'));
+ const archive=await (await call(db,'/export/archive')).json();assert.equal(archive.orders.length,215);assert.equal(archive.schemaVersion,2);assert.ok(!JSON.stringify(archive).includes('session_url'));
  const search=await (await call(db,'/archive?q=N-order-000')).json();assert.equal(search.total,1);
  const product=await (await call(db,'/archive?product=missing')).json();assert.equal(product.total,0);
 });

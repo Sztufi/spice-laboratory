@@ -36,7 +36,7 @@ test('commerce state stays honest in independent copy and merchant edits are not
  const {html}=renderSitePage(base,{pathname:'/termek/'+product.id,catalogue});
  assert.ok(html.includes(product.description));assert.ok(html.includes('valódi rendelést és fizetést nem fogadunk'));
  const legal=renderSitePage(base,{pathname:'/aszf'}).html;
- assert.ok(legal.includes('nem helyettesít végleges szerződési feltételeket'));
+ assert.ok(legal.includes('14 naptári nap'));
  assert.ok(legal.includes('SPICE LABORATORY S.R.L.'));
  const home=renderSitePage(base,{pathname:'/'}).html;
  assert.ok(home.includes('UNALMAS KAJA KIZÁRVA'));assert.ok(home.includes('MUTASD A FŰSZEREKET'));

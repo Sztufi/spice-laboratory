@@ -1,8 +1,10 @@
 import {all,query as q,loadStore,fail} from './store.mjs';
 import {reportOptions,startOfDay,shiftDay,dayCount,buildAnalytics,normalizeOrder} from './analytics-core.mjs';
+import {refundColumns} from './refunds.mjs';
+import {attachRefundReport} from './refund-report.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const source=`WITH raw AS (
- SELECT o.*,COALESCE(json_extract(CASE WHEN json_valid(p.customer_json) THEN p.customer_json ELSE '{}' END,'$.billing.email'),c.email,'') AS email,
+ SELECT o.*,${refundColumns()},(SELECT json_group_array(json_object('id',r.id,'amountMinor',r.amount_minor,'currency',r.currency,'status',r.status,'createdAt',r.created_at,'succeededAt',r.succeeded_at)) FROM payment_refunds r WHERE r.checkout_id=o.id) AS refunds_json,COALESCE(json_extract(CASE WHEN json_valid(p.customer_json) THEN p.customer_json ELSE '{}' END,'$.billing.email'),c.email,'') AS email,
  COALESCE(json_extract(CASE WHEN json_valid(p.customer_json) THEN p.customer_json ELSE '{}' END,'$.billing.name'),c.full_name,'') AS full_name,c.phone,
  p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision
  FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id
@@ -24,7 +26,7 @@ function archiveFilter(opt){
  return {where:where.join(' AND '),args};
 }
 export function publicArchiveOrder(row){
- const {items_json,shipping_json,discount_json,customer_json,...order}=normalizeOrder(row);
+ const {items_json,shipping_json,discount_json,customer_json,refunds_json,...order}=normalizeOrder(row);
  if(!order.valid)order.rawItemsForReview=items_json;
  return order;
 }
@@ -40,7 +42,10 @@ export async function analyticsReport(db,params,now=new Date()){
  if(rows.length>20000)fail(422,'Ez az elemzési ablak a biztonsági 20 000 rendeléses korlát fölött van. Szűkítsd az időszakot; a teljes archívum exportja ettől függetlenül elérhető. Nem készül csonkolt riport.');
  const first=await q(db,source+` SELECT MIN(s.created_at) AS first FROM source s WHERE ${paid} AND ${validPaidSql} AND s.currency='HUF' AND s.created_at<?`,end).first();
  const {catalogue}=await loadStore(db,{admin:true});
- return buildAnalytics(rows,catalogue,opt,{generatedAt:now.toISOString(),firstPaidAt:first?.first||null,reportLimit:20000,historyFrom:from,identityBasis:'normalizált e-mail, ennek hiányában fiókazonosító'});
+ const filter=archiveFilter(opt);
+ const refunds=opt.scope==='demo'?[]:await all(db,source+` SELECT r.id,r.checkout_id,r.amount_minor,r.currency,r.status,r.created_at,r.succeeded_at,o.number FROM payment_refunds r JOIN source o ON o.id=r.checkout_id WHERE ${filter.where.replaceAll('o.created_at','r.created_at')} AND r.status='succeeded' AND o.currency='HUF' AND ${validPaidSql.replaceAll('s.','o.')} ORDER BY r.created_at,r.id LIMIT 20001`,...filter.args);
+ if(refunds.length>20000)fail(422,'Túl sok visszatérítés az elemzési ablakban. Szűkítsd az időszakot; az archívum exportja teljes.');
+ return attachRefundReport(buildAnalytics(rows,catalogue,opt,{generatedAt:now.toISOString(),firstPaidAt:first?.first||null,reportLimit:20000,historyFrom:from,identityBasis:'normalizált e-mail, ennek hiányában fiókazonosító'}),refunds);
 }
 export async function archivePage(db,params,now=new Date()){
  const opt=reportOptions(params,now,true),filter=archiveFilter(opt);
@@ -54,8 +59,8 @@ export const csvCell=value=>{
 };
 export const csvText=rows=>'\ufeff'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
 const attachment=(body,name,type)=>new Response(body,{headers:{...headers,'Content-Type':type,'Content-Disposition':`attachment; filename="${name}"`}});
-const exportFields=['Rendelés','Azonosító','Dátum (UTC)','Típus','Fizetés','Teljesítés','Vásárló','E-mail','Összeg','Pénznem','Termékérték','Kuponkedvezmény','Szállítás','Célország','Egyezik az összesítő','Belső megjegyzés'];
-const orderCells=o=>[o.number,o.id,o.created_at,o.kind,o.status,o.fulfillment_status||'processing',o.full_name,o.email,o.total_minor/100,o.currency,o.gross/100,o.discountMinor/100,o.shippingMinor/100,o.country,o.valid?'igen':'ellenőrzendő',o.note||''];
+const exportFields=['Rendelés','Azonosító','Dátum (UTC)','Típus','Fizetés','Teljesítés','Vásárló','E-mail','Eredeti összeg','Pénznem','Termékérték','Kuponkedvezmény','Szállítás','Célország','Egyezik az összesítő','Belső megjegyzés','Sikeres visszatérítés','Visszatérítésre vár','Megtartott összeg','Visszatérítési állapot'];
+const orderCells=o=>[o.number,o.id,o.created_at,o.kind,o.status,o.fulfillment_status||'processing',o.full_name,o.email,o.total_minor/100,o.currency,o.gross/100,o.discountMinor/100,o.shippingMinor/100,o.country,o.valid?'igen':'ellenőrzendő',o.note||'',o.refundedMinor/100,o.refundPendingMinor/100,o.retainedMinor/100,o.refundStatus];
 export async function archiveExport(db,params,type,now=new Date()){
  if(!['orders','order-lines','archive'].includes(type))fail(404,'Ismeretlen archívumformátum.');
  const opt=reportOptions(params,now,true),filter=archiveFilter(opt),generatedAt=now.toISOString();
@@ -63,7 +68,7 @@ export async function archiveExport(db,params,type,now=new Date()){
  const encoder=new TextEncoder();let cursor=null,started=false,first=true;
  const stream=new ReadableStream({async pull(controller){
   try{
-   if(!started){started=true;controller.enqueue(encoder.encode(type==='archive'?JSON.stringify({schemaVersion:1,generatedAt,filters:opt,note:'Rendelési archívum, nem teljes adatbázis- vagy számlafájl-mentés. Visszatérítési és adóbontás hiányzik.'}).replace(/}$/,'')+',"orders":[':'\ufeff'+(type==='orders'?exportFields:[...exportFields,'Termékazonosító','Terméknév (rendelési pillanatkép)','Mennyiség','Egységár','Tételösszeg kupon előtt']).map(csvCell).join(';')+'\r\n'));return;}
+   if(!started){started=true;controller.enqueue(encoder.encode(type==='archive'?JSON.stringify({schemaVersion:2,generatedAt,filters:opt,note:'Rendelési archívum, nem teljes adatbázis- vagy számlafájl-mentés. A visszatérítési naplót is tartalmazza; adóbontás és számlafájlok nélkül.'}).replace(/}$/,'')+',"orders":[':'\ufeff'+(type==='orders'?exportFields:[...exportFields,'Termékazonosító','Terméknév (rendelési pillanatkép)','Mennyiség','Egységár','Tételösszeg kupon előtt']).map(csvCell).join(';')+'\r\n'));return;}
    const extra=cursor?' AND (o.created_at<? OR (o.created_at=? AND o.id<?))':'';
    const rows=await all(db,source+' SELECT o.* FROM source o WHERE '+filter.where+' AND o.created_at<=?'+extra+' ORDER BY o.created_at DESC,o.id DESC LIMIT 100',...filter.args,generatedAt,...(cursor?[cursor.date,cursor.date,cursor.id]:[]));
    if(!rows.length){if(type==='archive')controller.enqueue(encoder.encode(']}'));controller.close();return;}
@@ -85,6 +90,8 @@ export async function analyticsEndpoint(request,db,parts){
      if(!report.forecast.orders.available)fail(422,'Nincs elegendő adat az előrejelzés exportjához.');
      definitions.forecast=[['Becsült nap','Becsült rendelések','Becsült fizetett összeg (Ft)','Becsült darab'],report.forecast.orders.days.map((d,i)=>[d.day,d.value,report.forecast.paid.days[i].value/100,report.forecast.units.days[i].value])];
     }
+    definitions.refunds=[['Visszatérítés ID','Rendelés','Rendelés ID','Létrehozás (UTC)','Siker megfigyelve (UTC)','Összeg','Pénznem','Állapot'],report.refunds.map(r=>[r.id,r.number,r.checkout_id,r.created_at,r.succeeded_at,r.amount_minor/100,r.currency,r.status])];
+    definitions.timeline[0].push('Sikeres visszatérítés','Megtartott összeg');report.timeline.forEach((r,i)=>definitions.timeline[1][i].push(r.refundedMinor/100,r.retainedMinor/100));
     if(!Object.hasOwn(definitions,kind))fail(404,'Ismeretlen riport.');const [head,rows]=definitions[kind];
     return attachment(csvText([['Időzóna','Adatforrás','Riport készült',...head],...rows.map(row=>[report.filters.tz,report.filters.scope,report.generatedAt,...row])]),`spice-${kind}-${report.filters.from}-${report.filters.to}.csv`,'text/csv; charset=utf-8');
    }

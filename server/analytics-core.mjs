@@ -1,3 +1,4 @@
+import {refundSummary} from './refunds.mjs';
 const DAY=86400000;
 export const TIMEZONES=['Europe/Budapest','Europe/Bucharest','UTC'];
 export function dayKey(value,tz='Europe/Budapest'){
@@ -40,7 +41,7 @@ export function normalizeOrder(row){
  const reconciled=valid&&integer(gross)&&integer(discountMinor)&&integer(shippingMinor)&&discountMinor<=gross&&gross-discountMinor+shippingMinor===row.total_minor;
  const email=String(customer?.billing?.email||row.email||'').trim().toLowerCase();
  const identity=row.identity||(email&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&!/@(?:guest|checkout)\.invalid$/i.test(email)?'email:'+email:'id:'+row.user_id);
- return {...row,items:Array.isArray(items)?items:[],shipping,discount,customer,identity,email:customer?.billing?.email||row.email||'',full_name:customer?.billing?.name||row.full_name||'',country:shipping?.country||customer?.shipping?.address?.country||customer?.billing?.address?.country||'',valid:reconciled,gross,discountMinor,shippingMinor,units:valid?items.reduce((sum,i)=>sum+i.quantity,0):0};
+ return {...row,...refundSummary(row),refunds:parse(row.refunds_json,[]),items:Array.isArray(items)?items:[],shipping,discount,customer,identity,email:customer?.billing?.email||row.email||'',full_name:customer?.billing?.name||row.full_name||'',country:shipping?.country||customer?.shipping?.address?.country||customer?.billing?.address?.country||'',valid:reconciled,gross,discountMinor,shippingMinor,units:valid?items.reduce((sum,i)=>sum+i.quantity,0):0};
 }
 // Largest remainder allocation: allocated coupon cents always reconcile to the order.
 export function allocateDiscount(items,discount){

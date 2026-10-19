@@ -37,5 +37,5 @@ test('shipping and legal pages disclose missing business settings and never leak
  const empty=page('/szallitas-es-fizetes');assert.ok(empty.html.includes('még nincsenek véglegesítve'));assert.ok(empty.html.includes('nem jelent díjmentes szállítást'));
  const env={STRIPE_SECRET_KEY:'never-expose-this',OMNISEND_API_KEY:'nor-this',SHIPPING_METHODS_JSON:JSON.stringify([{id:'hu-home',country:'HU',label:'Házhozszállítás',feeMinor:99000,deliveryMinDays:2,deliveryMaxDays:4}])};
  const configured=page('/szallitas-es-fizetes',{env}).html;assert.ok(configured.includes('990 Ft'));assert.ok(configured.includes('2–4 munkanap'));assert.ok(!configured.includes('never-expose-this'));assert.ok(!configured.includes('nor-this'));
- assert.ok(page('/aszf').html.includes('nem helyettesít végleges szerződési feltételeket'));assert.ok(page('/kapcsolat').html.includes('mailto:hello@spicelaboratory.ro'));assert.ok(!page('/kapcsolat').html.includes('Üzenet elküldve'));
+ assert.ok(page('/aszf').html.includes('14 naptári nap'));assert.ok(page('/kapcsolat').html.includes('mailto:hello@spicelaboratory.ro'));assert.ok(!page('/kapcsolat').html.includes('Üzenet elküldve'));
 });

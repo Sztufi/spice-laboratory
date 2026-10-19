@@ -73,7 +73,7 @@ test('Omnisend outages remain pending instead of reporting a successful subscrip
 
 test('live paid events require consent and explicit enablement, are claimed once, and ambiguous sends need review',async()=>{
  const {deliverMarketingEvent}=await import('../server/commerce.mjs');
- const {db,sqlite}=database();const liveEnv={...env,STRIPE_MODE:'live',STRIPE_SECRET_KEY:'sk_live_fake',OMNISEND_ORDER_EVENTS_ENABLED:'true'};
+ const {db,sqlite}=database();const liveEnv={...env,STRIPE_MODE:'live',STRIPE_SECRET_KEY:'sk_live_fake',LEGAL_LAUNCH_APPROVED:'true',RESEND_API_KEY:'re_fake',TRANSACTIONAL_EMAIL_FROM:'shop@example.com',OMNISEND_ORDER_EVENTS_ENABLED:'true'};
  let eventCalls=0;const mock=mockStripe();mock.session.livemode=true;
  const ctx={db,env:liveEnv,user:alice,fetcher:async(url,options)=>{if(url.endsWith('/events')){eventCalls++;const payload=JSON.parse(options.body);assert.equal(payload.contact.email,alice.email);assert.equal(payload.eventName,'spice laboratory paid order');assert.equal(payload.properties.value,6490);throw new Error('ambiguous network failure');}if(url.endsWith('/contacts'))return Response.json({id:'contact'});return mock.fetcher(url,options);}};
  await call(ctx,'marketing','PUT',{subscribed:true,consentVersion:CONSENT_VERSION});await call(ctx,'checkout','POST',checkoutBody());mock.session.status='complete';mock.session.payment_status='paid';

@@ -1,11 +1,12 @@
 import {analyticsPanel,archivePanel,mountReports} from './admin-analytics.mjs';
+import {seoPanel,mountSeoPanel,seoFields,seoInput,mountSeoPreview} from './admin-seo.mjs';
 const $=selector=>document.querySelector(selector);
 const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalize=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const slug=value=>normalize(value).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
 const money=(value,currency='HUF')=>new Intl.NumberFormat('hu-HU',{style:'currency',currency,maximumFractionDigits:currency==='HUF'?0:2}).format((value||0)/100);
 const date=value=>value?new Intl.DateTimeFormat('hu-HU',{dateStyle:'medium'}).format(new Date(value)):'—';
-const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',archive:'Rendelési archívum',products:'Termékek',categories:'Kategóriák',ingredients:'Összetevők',orders:'Rendelések',customers:'Vásárlók',coupons:'Kuponok',recipes:'Blog / receptek',media:'Médiatár',newsletter:'Hírlevél',settings:'Beállítások'};
+const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',archive:'Rendelési archívum',products:'Termékek',categories:'Kategóriák',ingredients:'Összetevők',orders:'Rendelések',customers:'Vásárlók',coupons:'Kuponok',recipes:'Blog / receptek',seo:'SEO / keresőoptimalizálás',media:'Médiatár',newsletter:'Hírlevél',settings:'Beállítások'};
 const kindNames={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon'};
 const stateLabels={'pending-payment':'Fizetésre vár',published:'Közzétéve',draft:'Piszkozat',archived:'Archiválva',paid:'Fizetve','demo-completed':'Próbavásárlás',processing:'Feldolgozás',packing:'Csomagolás',shipped:'Feladva',completed:'Teljesítve','on-hold':'Várakozik',cancelled:'Törölve',synced:'Omnisend visszaigazolta',failed:'Szinkronhiba',pending:'Függőben'};
 let data=null,tab=new URLSearchParams(location.search).get('tab')||'dashboard',editing=null;
@@ -43,8 +44,9 @@ function render(){
  $('#admin-nav').innerHTML=Object.entries(labels).map(([id,label])=>`<button type="button" data-tab="${id}"${id===tab?' aria-current="page"':''}>${icon}${label}</button>`).join('');
  $('#admin-title').textContent=labels[tab].toLocaleUpperCase('hu');$('#admin-user').textContent=data.user.email;
  $('#admin-actions').innerHTML=kindNames[tab]?`${['products'].includes(tab)?'<a class="button light" href="/api/admin/export/products">CSV export ↓</a>':''}${button(tab==='products'?'ÚJ TERMÉK +':tab==='categories'?'ÚJ KATEGÓRIA +':tab==='ingredients'?'ÚJ ÖSSZETEVŐ +':tab==='recipes'?'ÚJ RECEPT +':'ÚJ KUPON +',`data-new="${tab}"`,'yellow')}`:tab==='orders'?'<a class="button light" href="/api/admin/export/orders">CSV export ↓</a>'+button('ÚJ RENDELÉS +','id="new-order"','yellow'):'';
- $('#admin-panel').innerHTML=({dashboard,analytics:()=>analyticsPanel(data.catalogue),archive:()=>archivePanel(data.catalogue),products,categories,ingredients,recipes,coupons,customers,media,newsletter,settings,orders:()=>'<p class="admin-hint">Legutóbbi 200 rendelés. A fizetési állapotot a Stripe visszaigazolása adja; a csomagolás és feladás külön kezelhető.</p>'+searchBox('Rendelésszám, vásárló vagy e-mail')+orderTable(data.orders)}[tab]||dashboard)();
+ $('#admin-panel').innerHTML=({dashboard,analytics:()=>analyticsPanel(data.catalogue),archive:()=>archivePanel(data.catalogue),seo:()=>seoPanel(data),products,categories,ingredients,recipes,coupons,customers,media,newsletter,settings,orders:()=>'<p class="admin-hint">Legutóbbi 200 rendelés. A fizetési állapotot a Stripe visszaigazolása adja; a csomagolás és feladás külön kezelhető.</p>'+searchBox('Rendelésszám, vásárló vagy e-mail')+orderTable(data.orders)}[tab]||dashboard)();
  if(tab==='analytics'||tab==='archive')mountReports($('#admin-panel'),api,{archive:tab==='archive'});
+ if(tab==='seo')mountSeoPanel($('#admin-panel'),data,api,refresh);
 }
 async function refresh(){data=await api();render();}
 function openEditor(kind,record,duplicate=false){
@@ -57,13 +59,16 @@ function openEditor(kind,record,duplicate=false){
  else if(kind==='ingredients')fields=field('label','Összetevő neve',original.label||'','text','required maxlength="100"')+fields+statusField;
  else if(kind==='recipes')fields=field('title','Recept címe',original.title||'','text','required maxlength="160"')+fields+area('excerpt','Bevezető',original.excerpt||'')+`<div class="form-two">${field('minutes','Elkészítési idő (perc)',original.minutes||30,'number','required min="1" max="1440"')}${field('servings','Adag',original.servings||2,'number','required min="1" max="100"')}</div>`+area('recipeIngredients','Hozzávalók – soronként egy',original.ingredients?.join('\n')||'','rows="7"')+area('steps','Elkészítés – minden lépés külön sorban',original.steps?.join('\n')||'','rows="9"')+area('tip','Tipp',original.tip||'')+checks('productIds','Kapcsolódó Spice Laboratory termékek',data.catalogue.products,original.productIds||[])+imageFields(original.image)+`<div class="form-two">${field('color','Kártya színe',original.color||'#ffe383','color')}${statusField}</div>`+(original.id?`<a class="recipe-preview-link" href="/blog/${h(original.id)}" target="_blank" rel="noopener">Nyilvános receptoldal megnyitása ↗</a>`:'');
  else if(kind==='coupons')fields=field('code','Kuponkód',original.code||'','text',`required pattern="[A-Za-z0-9-]{2,40}" ${editing.isNew?'':'readonly'}`)+fields+select('type','Kedvezmény típusa',[['percent','Százalék'],['fixed','Fix összeg (Ft)']],original.type||'percent')+field('amount','Kedvezmény (% vagy Ft)',original.type==='fixed'?original.amount/100:original.amount||10,'number','required min="1" step="1"')+field('minimum','Minimum termékösszeg (Ft)',original.minimumMinor?original.minimumMinor/100:0,'number','required min="0" step="1"')+field('expiresAt','Lejárat (opcionális)',original.expiresAt?.slice(0,10)||'','date')+statusField;
+ if(['products','categories','recipes'].includes(kind))fields+=seoFields(original.seo);
  $('#editor-title').textContent=editing.isNew?'ÚJ '+labels[kind].toLocaleUpperCase('hu'):kind==='products'?original.name:kind==='recipes'?original.title:'SZERKESZTÉS';
  $('#editor-content').innerHTML=`<form class="editor-form" id="record-form">${fields}<p class="editor-error" id="editor-error" role="alert" hidden></p><div class="editor-footer"><div>${!editing.isNew?button('Archiválás','id="archive-record"','danger'):''}</div><button class="button yellow" type="submit">MENTÉS →</button></div></form>`;
  $('#admin-editor').showModal();
+ mountSeoPreview($('#editor-content'),{title:original.name||original.title||original.label,description:original.description||original.excerpt});
 }
 function recordInput(form){
  const {original,kind}=editing,values=new FormData(form),v=name=>String(values.get(name)||''),number=name=>Number(v(name));
  const input={...original,id:v('id'),status:v('status'),revision:original.revision||'new'};
+ if(['products','categories','recipes'].includes(kind))input.seo=seoInput(values);
  if(kind==='products')Object.assign(input,{name:v('name'),subtitle:v('subtitle'),description:v('description'),sku:v('sku'),priceMinor:Math.round(number('price')*100),salePriceMinor:v('salePrice')?Math.round(number('salePrice')*100):null,weightGrams:number('weight'),manageStock:values.has('manageStock'),stockQuantity:number('stock'),categories:values.getAll('categories'),ingredientIds:values.getAll('ingredientIds'),sourceIngredientText:v('sourceIngredientText'),traceStatementOriginal:v('traceStatementOriginal'),image:v('image'),color:v('color')});
  else if(kind==='categories')Object.assign(input,{label:v('label'),description:v('description'),headline:v('headline'),slug:v('slug'),parentId:v('parentId'),color:v('color')});
  else if(kind==='ingredients')input.label=v('label');

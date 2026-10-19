@@ -4,9 +4,11 @@ import { renderSitePage } from '../server/pages.mjs';
 import {loadStore,runtimeEnv,isStoreAdmin} from '../server/store.mjs';
 import {adminPage} from '../server/admin-page.mjs';
 import {getChatGPTUser} from './chatgpt-auth';
+import {seoEndpoint,seoSetting,seoRedirect} from '../server/seo.mjs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
  const url=new URL(request.url);
+ if(url.pathname.length>1&&url.pathname.endsWith('/')){url.pathname=url.pathname.replace(/\/+$/,'');return Response.redirect(url.href,308);}
  const headers={'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'};
  if(url.pathname.startsWith('/media/')){
   const filename=url.pathname.slice(7);if(!/^[a-f0-9-]{36}\.(png|jpg|webp)$/.test(filename)||!env.BUCKET)return new Response('Nem található.',{status:404});
@@ -21,7 +23,9 @@ export async function GET(request: Request) {
  }
  try{
   const [store,settings]=await Promise.all([loadStore(env.DB),runtimeEnv(env.DB,env)]);
-  const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,isAdmin});
+  const redirect=seoRedirect(url.pathname,store.catalogue.categories);if(redirect){url.pathname=redirect;return Response.redirect(url.href,308);}
+  const special=seoEndpoint(url.pathname,store,settings,url.origin);if(special)return special;
+  const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,seo:seoSetting(store),isAdmin});
   return new Response(page.html,{status:page.status,headers});
  }catch{return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Átmenetileg nem elérhető</title><h1>Az oldal átmenetileg nem elérhető.</h1><p>Próbáld újra később.</p></html>',{status:503,headers});}
 }

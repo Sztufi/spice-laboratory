@@ -1,5 +1,6 @@
 import {productExperience} from './product-experience.mjs';
 import {homeExperience} from './home-experience.mjs';
+import {seoDocument} from './seo.mjs';
 import {ingredientDetails} from '../public/ingredient-copy.mjs';
 import { seedCatalogue } from '../public/catalogue.mjs';
 import {recipeSeeds} from '../public/recipe-data.mjs';
@@ -100,8 +101,9 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  else if(['/aszf','/adatkezeles','/sutik'].includes(path)){title=legalLinks.find(item=>item.path===path).label;content=legalPage(path.slice(1),config);}
  else{status=404;title='Az oldal nem található';content=`${intro('404 · EZ MOST NEM KEVEREDIK.','EZ AZ OLDAL<br>ELMENT EBÉDELNI.','Ezt az oldalt nem találjuk. A fűszerek viszont megvannak: keresd meg őket a termékek között.',[{label:'Az oldal nem található'}])}<form class="not-found-search" method="get" action="/termekek"><label for="page-search">Termék vagy összetevő keresése</label><div><input id="page-search" name="q" type="search" maxlength="150" placeholder="Például: fokhagyma"><button class="primary-button yellow" type="submit">KERESÉS →</button></div></form><div class="page-bottom-cta">${link('/termekek','TERMÉKEK MEGNÉZÉSE →','secondary-button')}</div>`;}
  if(path==='/'&&recipes.length)content+=`<section class="home-recipes" aria-labelledby="home-recipes-title"><div class="home-recipes-heading"><div><p class="section-kicker">A KONYHÁD A LABOR.</p><h2 id="home-recipes-title">MEGVAN A FŰSZER.<br>MI LEGYEN A KAJA?</h2></div><div><p>Nem hagyunk magadra egy üveg fűszerrel. Válassz receptet: mutatjuk a hozzávalókat, a lépéseket és a hozzá való keverékeket.</p>${link('/blog','MINDEN RECEPT →','text-button')}</div></div>${recipeCards(recipes.slice(0,3),catalogue)}</section>`;
- const fullTitle=path==='/'?title:title+' | Spice Laboratory';
- let html=base.replace(/<title>[\s\S]*?<\/title>/,`<title>${h(fullTitle)}</title>`).replace(/<meta name="description" content="[^"]*">/,`<meta name="description" content="${h(description)}">`).replace('</head>',`<link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/recipes.css"><link rel="stylesheet" href="/product-experience.css"><link rel="stylesheet" href="/home-experience.css"><meta name="robots" content="noindex, nofollow"><link rel="canonical" href="${h(origin+path)}"></head>`);
+ const metadata=seoDocument({path,search,status,title:path==='/'?title:title+' | Spice Laboratory',description,catalogue:{...catalogue,categories:categoryPages},recipes,settings:options.seo||{},env,origin,live:config.stripeEnabled&&config.mode==='live'});
+ const fullTitle=metadata.title;
+ let html=base.replace(/<title>[\s\S]*?<\/title>/,`<title>${h(fullTitle)}</title>`).replace(/<meta name="description" content="[^"]*">/,`<meta name="description" content="${h(metadata.description)}">`).replace('</head>',`<link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/recipes.css"><link rel="stylesheet" href="/product-experience.css"><link rel="stylesheet" href="/home-experience.css">${metadata.tags}</head>`);
  html=html.replace('<body>',`<body data-page="${path==='/'?'home':'interior'}"${category?` data-page-category="${category.id}"`:''}><a class="skip-link" href="#main-content">Ugrás a tartalomhoz</a>`);
  html=html.replace(/<main>[\s\S]*?<\/main>/,`<main id="main-content"${path==='/'?'':' class="inner-page"'} tabindex="-1">${content}</main>`);
  html=html.replace(/<p class="source-note">[\s\S]*?<\/p>/,config.stripeEnabled?'<p class="source-note">'+(config.mode==='test'?'STRIPE TESZTMÓD · Nem történik valódi pénzmozgás.':'Fizetés a Stripe felületén.')+'</p>':'<p class="source-note">WEBSHOP DEMÓ · Nem fogad valódi rendelést vagy fizetést.</p>');

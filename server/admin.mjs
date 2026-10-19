@@ -1,6 +1,8 @@
 import {loadStore,query as q,all,StoreError,fail,text,slug,imageUrl,recordDefaults,isStoreAdmin,runtimeEnv} from './store.mjs';
 import {shippingMethods} from './shipping.mjs';
 import {analyticsEndpoint} from './admin-analytics.mjs';
+import {seoState,seoSetting} from './seo.mjs';
+import {seoPages} from '../public/seo-data.mjs';
 import {commerceConfig} from './commerce.mjs';
 import {assertSameOrigin} from './account.mjs';
 import {cartTotals} from '../public/shop-core.mjs';
@@ -14,6 +16,10 @@ const time=()=>new Date().toISOString();
 const int=(value,min,max)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail(400,'Hibás számérték.');return value;};
 const list=(value,max=100)=>{if(!Array.isArray(value)||value.length>max)fail(400,'Hibás lista.');return value;};
 const strings=(value,max=100)=>[...new Set(list(value,max).map(item=>text(item,100,true)))];
+function validateSeo(value={}){
+ if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'Hibás SEO-adat.');
+ return {title:text(value.title,120),description:text(value.description,500),focusKeyword:text(value.focusKeyword,160),noindex:value.noindex===true};
+}
 async function limited(request,limit=100000){
  if(Number(request.headers.get('content-length')||0)>limit)fail(413,'Túl nagy feltöltés.');
  const reader=request.body?.getReader();if(!reader)return new Uint8Array();const parts=[];let size=0;
@@ -38,7 +44,9 @@ function validate(kind,input,store){
   const parentId=text(input.parentId,90);if(parentId&&(parentId===id||!store.catalogue.categories.some(item=>item.id===parentId&&item.status!=='archived')))fail(400,'Hibás szülőkategória.');
   let parent=parentId;const seen=new Set([id]);while(parent){if(seen.has(parent))fail(400,'Körkörös kategóriahierarchia.');seen.add(parent);parent=store.catalogue.categories.find(item=>item.id===parent)?.parentId||'';}
   data={id,label:text(input.label,100,true),description:text(input.description,800),headline:text(input.headline,160),slug:text(input.slug,90)||id,parentId,color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#e6c9f0'};
-  if(!/^[a-z0-9-]+$/.test(data.slug)||store.catalogue.categories.some(item=>item.id!==id&&item.slug===data.slug&&item.status!=='archived'))fail(400,'Ez a kategória-webcím már foglalt vagy érvénytelen.');
+  if(!/^[a-z0-9-]+$/.test(data.slug)||store.catalogue.categories.some(item=>item.id!==id&&(item.slug===data.slug||item.previousSlugs?.includes(data.slug))&&item.status!=='archived'))fail(400,'Ez a kategória-webcím már foglalt vagy érvénytelen.');
+  const previous=store.catalogue.categories.find(item=>item.id===id);
+  data.previousSlugs=[...new Set([...(previous?.previousSlugs||[]),...(previous?.slug&&previous.slug!==data.slug?[previous.slug]:[])])].filter(value=>value!==data.slug);
   if(status==='archived'&&store.catalogue.products.some(item=>item.status!=='archived'&&item.categories.includes(id)))fail(409,'Előbb sorold át a kategóriában lévő termékeket.');
  }else if(kind==='ingredient'){
   data={id,label:text(input.label,100,true)};
@@ -53,9 +61,16 @@ function validate(kind,input,store){
   const code=text(input.code,40,true).toUpperCase();if(slug(code)!==id||!/^[A-Z0-9-]{2,40}$/.test(code))fail(400,'A kuponkód nagybetűt, számot és kötőjelet tartalmazhat.');
   const expiresAt=text(input.expiresAt,40);if(expiresAt&&!Number.isFinite(Date.parse(expiresAt)))fail(400,'Hibás lejárati dátum.');
   data={id,code,type,amount:int(input.amount,1,type==='percent'?100:10000000),minimumMinor:int(input.minimumMinor||0,0,100000000),expiresAt};
+ }else if(kind==='setting'&&id==='seo'){
+  if(status!=='published')fail(400,'A SEO-beállításokat közzétett állapotban kell menteni.');
+  const pages=input.pages||{};
+  if(typeof pages!=='object'||Array.isArray(pages)||Object.keys(pages).some(path=>!seoPages.some(p=>p.path===path)))fail(400,'Ismeretlen SEO-oldal.');
+  const verification=text(input.verification,200);if(verification&&!/^[A-Za-z0-9_-]+$/.test(verification))fail(400,'Csak a Google ellenőrzőkódját add meg, ne HTML-t.');
+  data={id,indexingEnabled:input.indexingEnabled===true,verification,pages:Object.fromEntries(Object.entries(pages).map(([path,value])=>[path,validateSeo(value)]))};
  }else if(kind==='setting'&&id==='shipping'){
   const methods=list(input.methods,10);const valid=shippingMethods({SHIPPING_METHODS_JSON:JSON.stringify(methods)});if(valid.length!==methods.length)fail(400,'Ellenőrizd a szállítási díjakat és kézbesítési időket.');data={id,methods:valid};
  }else fail(404,'Ismeretlen adattípus.');
+ if(['product','category','recipe'].includes(kind))data.seo=validateSeo(input.seo);
  return {...data,status,revision:text(input.revision,100)||'new'};
 }
 async function audit(db,user,action,kind,id){await q(db,'INSERT INTO store_admin_audit(id,actor_id,action,entity,entity_id,created_at) VALUES(?,?,?,?,?,?)',crypto.randomUUID(),user.userId,action,kind,id,time()).run();}
@@ -63,7 +78,7 @@ async function save(db,user,kind,data,isNew){
  const {status,revision,...payload}=data;
  if(isNew&&(recordDefaults(kind).some(item=>item.id===data.id)||await q(db,'SELECT id FROM store_records WHERE kind=? AND id=?',kind,data.id).first()))fail(409,'Ez az azonosító már létezik.');
  const previous=await q(db,'SELECT revision FROM store_records WHERE kind=? AND id=?',kind,data.id).first();
- if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&data.id==='shipping'))fail(404,'Nem található bejegyzés.');
+ if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo'].includes(data.id)))fail(404,'Nem található bejegyzés.');
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
  const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?)
@@ -80,7 +95,7 @@ async function overview(db,user,env){
   all(db,'SELECT action,entity,entity_id,created_at FROM store_admin_audit ORDER BY created_at DESC LIMIT 50')
  ]);
  const totals=await q(db,"SELECT COUNT(*) AS orders,COALESCE(SUM(total_minor),0) AS revenue FROM customer_orders WHERE kind='stripe' AND status='paid'").first();
- return {user:{email:user.email,name:user.fullName||user.email},...store,orders:orders.map(row=>({...row,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined})),customers,subscribers,audit:auditRows,totals,config:commerceConfig(await runtimeEnv(db,env))};
+ return {user:{email:user.email,name:user.fullName||user.email},...store,orders:orders.map(row=>({...row,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
 }
 async function upload(request,{db,bucket,user}){
  if(!bucket)fail(503,'A képtár nem érhető el.');

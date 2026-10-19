@@ -1,0 +1,15 @@
+// Editable static-page defaults. Keywords are editorial notes, never meta keywords.
+export const seoPages=[
+ {path:'/',label:'Főoldal',title:'Fűszerkeverékek a következő kajádhoz | Spice Laboratory',description:'Fűszerkeverékek grillhez, sült krumplihoz és mártogatósokhoz. Nézd meg az összetevőket, válassz receptet, és dobd fel a következő kaját.',focusKeyword:'fűszerkeverékek'},
+ {path:'/termekek',label:'Összes termék',title:'Fűszerkeverékek: grill, BBQ és mártogatós | Spice Laboratory',description:'Találd meg a kajádhoz illő fűszerkeveréket. Szűrj felhasználás és összetevők szerint, nézd meg a kiszerelést és az aktuális árat.',focusKeyword:'fűszerkeverék vásárlás'},
+ {path:'/kategoriak',label:'Kategóriák',title:'Fűszerek felhasználás szerint | Spice Laboratory',description:'Grill, sült krumpli, mártogatós vagy világkonyha? Indulj abból, amit főznél, és nézd meg a hozzá illő fűszerkeverékeket.',focusKeyword:'fűszerek felhasználás szerint'},
+ {path:'/blog',label:'Receptek',title:'Receptek és főzési ötletek fűszerekkel | Spice Laboratory',description:'Receptötletek a Spice Laboratory fűszerkeverékeivel. Hozzávalók, elkészítési lépések és kapcsolódó fűszerek egy helyen.',focusKeyword:'receptek fűszerkeverékkel'},
+ {path:'/rolunk',label:'Rólunk',title:'Rólunk: ízben nincs mellébeszélés | Spice Laboratory',description:'A hétköznapi kajának sem kell unalmasnak lennie. Ismerd meg a Spice Laboratory hozzáállását a fűszerekhez és a főzéshez.'},
+ {path:'/kapcsolat',label:'Kapcsolat',title:'Kapcsolat és rendelési segítség | Spice Laboratory',description:'Kérdésed van a fűszerekről, a rendelésedről vagy egy együttműködésről? Itt találod a Spice Laboratory elérhetőségeit.'},
+ {path:'/gyik',label:'Gyakori kérdések',title:'Gyakori kérdések a fűszerekről és vásárlásról | Spice Laboratory',description:'Melyik fűszert válaszd, hol találod az összetevőket, és hogyan működik a vásárlás? Rövid, egyenes válaszok egy helyen.'},
+ {path:'/szallitas-es-fizetes',label:'Szállítás és fizetés',title:'Szállítási és fizetési információk | Spice Laboratory',description:'Elérhető szállítási módok, aktuális díjak és fizetési információk. Ellenőrizd a feltételeket a rendelésed előtt.'},
+ {path:'/visszakuldes',label:'Visszaküldés',title:'Visszaküldés és reklamáció | Spice Laboratory',description:'Probléma van a csomagoddal? Itt találod a visszaküldéssel és reklamációval kapcsolatos tájékoztatást és elérhetőséget.'},
+ {path:'/aszf',label:'ÁSZF',title:'Általános szerződési feltételek | Spice Laboratory',description:'A webshop szerződési feltételeinek és üzemeltetői adatainak tájékoztató oldala.',noindex:true},
+ {path:'/adatkezeles',label:'Adatkezelés',title:'Adatkezelési tájékoztató | Spice Laboratory',description:'Tájékoztatás a webshophoz kapcsolódó adatkezelésről és adatvédelmi kérelmekről.',noindex:true},
+ {path:'/sutik',label:'Sütik',title:'Sütitájékoztató | Spice Laboratory',description:'Tájékoztatás a webshop működéséhez használt sütikről és böngészőtárolókról.',noindex:true}
+];

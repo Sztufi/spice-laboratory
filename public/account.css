@@ -99,8 +99,5 @@
 .account-login .magic-login-form [role=status]{font-size:12px;margin:0}
 .account-login .magic-login-form [role=status]:empty{display:none}
 .account-login .magic-login-form small{font-size:11px}
-.account-login .magic-login-form[data-magic-available=false]>label,.account-login .magic-login-form[data-magic-available=false]>button,.account-login .magic-login-form[data-magic-available=false]>small{display:none}
-.account-login .magic-login-form[data-magic-available=false]{margin-top:14px}
-.account-login:has(.magic-login-form[data-magic-available=false]) .login-divider{display:none}
 .account-login details{margin-top:18px;font-size:11px}
 #account-page-login .account-login{margin-top:0}

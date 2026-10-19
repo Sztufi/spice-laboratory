@@ -2,9 +2,23 @@
 
 Implemented on 2026-10-19. Email magic links complement Google customer login. Native Sites owner/admin authentication remains separate. No SMS integration was added.
 
-## Activation still required
+## Omnisend delivery
 
-No real authentication email has been sent. The integration is disabled until all of the following runtime values are configured through Sites, followed by deployment:
+The runtime-selectable `MAGIC_EMAIL_PROVIDER=omnisend` sends the server event `spice magic login requested` using API version `2026-03-15`. Only email, a one-use URL and expiry are passed; no marketing opt-in, consent, tags or persistent contact custom properties are written. Marketing cookie consent is unrelated to this requested transactional message.
+
+Workflow: https://app.omnisend.com/automation/edit/6ad66bcc46b98c79b279bb7e
+
+The workflow has one immediate send-email action, email threshold `all`, no frequency/overlap limiter and no enrollment of historical contacts. Current sender selected by the provider: `communications@6ad63163b4aa089441abd81f.soundest1.com`. Hungarian content uses `en_US` metadata because the platform has no Hungarian locale. Imported template ID: `6ad66bbac84006820d7c16a1`.
+
+Required runtime keys: `MAGIC_AUTH_ENABLED=true`, exact HTTPS origins in `MAGIC_ALLOWED_ORIGINS_JSON`, `MAGIC_EMAIL_PROVIDER=omnisend`, `OMNISEND_ENABLED=true`, secret `OMNISEND_API_KEY` with `events.write`, and `MAGIC_OMNISEND_AUTOMATION_ID=6ad66bcc46b98c79b279bb7e`. The automation ID is an activation guard, not an event routing parameter. Provider errors, unexpected statuses, redirects and timeouts fail closed and delete the pending link. Only documented HTTP 202 counts as accepted. No automatic retry: real-time automation events are not deduplicated by Omnisend. Acceptance is queue acceptance, not delivery evidence.
+
+Link tokens expire in our DB after 10 minutes, independent of the provider's event/email log retention. They must not be written to application logs. Click tracking/link rewriting and inbox delivery must be verified from the actual received message; the connector exposes no email tracking toggle. The existing fragment, browser binding, replay and admin protections remain in force.
+
+Official references: https://api-docs.omnisend.com/reference/post_events and https://api-docs.omnisend.com/docs/how-to-send-custom-events-to-trigger-custom-automations
+
+## Alternative Resend configuration (not used by Omnisend)
+
+When selecting the default/legacy Resend provider, the following values must be configured through Sites, followed by deployment:
 
 | Runtime value | Setting |
 | --- | --- |

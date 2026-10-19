@@ -60,3 +60,23 @@ test('Google account linking needs the matching Google session plus email proof 
  const another=await call(ctx,'request',{email:'separate@example.com'});await call(ctx,'verify',{token:token(ctx)},cookies(another));
  assert.notEqual(ctx.sqlite.prepare('SELECT user_id FROM email_login_identities WHERE email=?').get('separate@example.com').user_id,'google:subject');
 });
+test('Omnisend transaction event preserves subscription state and one-use login, without Resend credentials',async()=>{
+ const ctx=context();ctx.env={MAGIC_AUTH_ENABLED:'true',MAGIC_ALLOWED_ORIGINS_JSON:JSON.stringify([origin]),MAGIC_EMAIL_PROVIDER:'omnisend',OMNISEND_ENABLED:'true',OMNISEND_API_KEY:'private-test-key',MAGIC_OMNISEND_AUTOMATION_ID:'a'.repeat(24)};
+ let event;
+ ctx.fetcher=async(url,init)=>{assert.equal(url,'https://api.omnisend.com/api/events');assert.equal(init.redirect,'error');assert.equal(init.headers.Authorization,'Omnisend-API-Key private-test-key');assert.equal(init.headers['Omnisend-Version'],'2026-03-15');event=JSON.parse(init.body);return new Response(null,{status:202});};
+ const response=await call(ctx,'request',{email:'alice@example.com'});assert.equal(response.status,200);
+ assert.deepEqual(event.contact,{email:'alice@example.com'});assert.equal(event.eventName,'spice magic login requested');assert.equal(event.origin,'api');
+ assert.deepEqual(Object.keys(event.properties).sort(),['expiresAt','loginUrl']);assert.ok(Date.parse(event.properties.expiresAt)>Date.now());
+ const t=event.properties.loginUrl.match(/#magic=([a-f0-9]{64})$/)[1];assert.ok(!(await response.text()).includes(t));
+ const verified=await call(ctx,'verify',{token:t},cookies(response));assert.equal(verified.status,200);assert.equal((await call(ctx,'verify',{token:t},cookies(response))).status,401);
+ assert.equal((await magicCustomer(req('config',undefined,cookies(verified)),ctx.db,ctx.env)).provider,'magic');
+ for(const patch of [{OMNISEND_API_KEY:''},{OMNISEND_ENABLED:'false'},{MAGIC_OMNISEND_AUTOMATION_ID:''},{MAGIC_EMAIL_PROVIDER:'unknown'}])assert.equal(magicConfig({...ctx.env,...patch},origin).enabled,false);
+});
+test('Omnisend rejection, redirect, malformed success and timeout never leave a usable login or leak provider details',async()=>{
+ for(const status of [200,302,400,401,403,429,500,'timeout']){
+  const ctx=context();ctx.env={...ctx.env,MAGIC_EMAIL_PROVIDER:'omnisend',OMNISEND_ENABLED:'true',OMNISEND_API_KEY:'private-test-key',MAGIC_OMNISEND_AUTOMATION_ID:'a'.repeat(24)};
+  let calls=0;ctx.fetcher=async()=>{calls++;if(status==='timeout')throw new Error('private-provider-details');return Response.json({secret:'private-provider-details'},{status});};
+  const response=await call(ctx,'request',{email:'alice@example.com'});assert.equal(response.status,503);assert.equal(calls,1);assert.ok(!(await response.text()).includes('private-provider-details'));
+  assert.equal(ctx.sqlite.prepare('SELECT count(*) AS n FROM email_login_links').get().n,0);
+ }
+});

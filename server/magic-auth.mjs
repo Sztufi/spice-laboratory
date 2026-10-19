@@ -13,7 +13,9 @@ function fail(status,message){const e=new Error(message);e.status=status;throw e
 export function magicConfig(env={},origin){
  let origins=[];try{origins=JSON.parse(env.MAGIC_ALLOWED_ORIGINS_JSON||'[]');}catch{}
  const from=typeof env.MAGIC_EMAIL_FROM==='string'?env.MAGIC_EMAIL_FROM:'';
- const enabled=env.MAGIC_AUTH_ENABLED==='true'&&Array.isArray(origins)&&origins.includes(origin)&&origin.startsWith('https://')&&typeof env.RESEND_API_KEY==='string'&&env.RESEND_API_KEY.startsWith('re_')&&from.length<=254&&/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(from);
+ const provider=env.MAGIC_EMAIL_PROVIDER||'resend';
+ const ready=provider==='omnisend'?env.OMNISEND_ENABLED==='true'&&typeof env.OMNISEND_API_KEY==='string'&&env.OMNISEND_API_KEY.length>0&&/^[a-f0-9]{24}$/.test(env.MAGIC_OMNISEND_AUTOMATION_ID||''):provider==='resend'&&typeof env.RESEND_API_KEY==='string'&&env.RESEND_API_KEY.startsWith('re_')&&from.length<=254&&/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(from);
+ const enabled=env.MAGIC_AUTH_ENABLED==='true'&&Array.isArray(origins)&&origins.includes(origin)&&origin.startsWith('https://')&&ready;
  return {enabled};
 }
 export async function magicCustomer(request,db,env={}){
@@ -35,6 +37,14 @@ async function limit(db,key,window,maximum){
  if(row.attempts>maximum)fail(429,'Túl sok kérés. Próbáld újra később.');
 }
 async function sendEmail(env,email,link,fetcher){
+ if(env.MAGIC_EMAIL_PROVIDER==='omnisend'){
+  // Transactional server event: no optIns, consent, tags or contact properties.
+  // Never retry automatically: real-time events are not deduplicated by Omnisend.
+  const response=await fetcher('https://api.omnisend.com/api/events',{method:'POST',redirect:'error',headers:{Authorization:'Omnisend-API-Key '+env.OMNISEND_API_KEY,'Omnisend-Version':'2026-03-15','Content-Type':'application/json'},body:JSON.stringify({eventName:'spice magic login requested',origin:'api',eventID:crypto.randomUUID(),contact:{email},properties:{loginUrl:link,expiresAt:new Date(Date.now()+600000).toISOString()}}),signal:AbortSignal.timeout(15000)});
+  if(response.status!==202)fail(503,'A belépési levelet most nem sikerült elküldeni. Próbáld újra később.');
+  await response.body?.cancel();
+  return;
+ }
  const response=await fetcher('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:'Spice Laboratory <'+env.MAGIC_EMAIL_FROM+'>',to:[email],subject:'Egy kattintás, és bent vagy – Spice Laboratory',text:`Itt a belépési linked:\n${link}\n\n10 percig, egyszer használható. Másik böngészőben még meg kell erősítened a belépést. Ha nem te kérted, hagyd figyelmen kívül ezt a levelet. A linket ne oszd meg senkivel.`,html:`<div style="background:#fff9e9;color:#17130f;padding:32px;font-family:Arial,sans-serif;max-width:520px"><h1>EZ A TE BELÉPŐD.</h1><p>A fűszereid, kedvenceid és rendeléseid várnak.</p><p><a href="${link}" style="display:inline-block;background:#ffd336;color:#17130f;padding:16px 22px;font-weight:bold;text-decoration:none">BELÉPEK A FIÓKOMBA</a></p><p>10 percig, egyszer használható. Másik böngészőben még meg kell erősítened a belépést.</p><p>Ha nem te kérted, hagyd figyelmen kívül ezt a levelet. A linket ne oszd meg senkivel.</p></div>`}),signal:AbortSignal.timeout(15000)});
  if(!response.ok)fail(503,'A belépési levelet most nem sikerült elküldeni. Próbáld újra később.');
  const result=await response.json().catch(()=>null);if(typeof result?.id!=='string')fail(503,'A levélküldő nem igazolta vissza a küldést. Próbáld újra később.');

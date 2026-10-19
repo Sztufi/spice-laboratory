@@ -1,5 +1,6 @@
 import {loadStore,query as q,all,StoreError,fail,text,slug,imageUrl,recordDefaults,isStoreAdmin,runtimeEnv} from './store.mjs';
 import {shippingMethods} from './shipping.mjs';
+import {analyticsEndpoint} from './admin-analytics.mjs';
 import {commerceConfig} from './commerce.mjs';
 import {assertSameOrigin} from './account.mjs';
 import {cartTotals} from '../public/shop-core.mjs';
@@ -107,6 +108,7 @@ export async function handleAdminRequest(request,ctx){
   if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
   const parts=new URL(request.url).pathname.replace(/^\/api\/admin\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
   if(request.method==='GET'&&!parts.length)return json(await overview(db,user,env));
+  if(request.method==='GET'&&(['analytics','archive'].includes(parts[0])||parts[0]==='export'&&['orders','order-lines','archive'].includes(parts[1])))return await analyticsEndpoint(request,db,parts);
   if(request.method==='GET'&&parts[0]==='customers'&&parts.length===2){
    const profile=await q(db,'SELECT id,email,full_name,phone,created_at FROM customers WHERE id=?',parts[1]).first();if(!profile)fail(404,'A vásárló nem található.');
    const [addresses,invoices]=await Promise.all([all(db,'SELECT kind,recipient,company,tax_id,country,line1,line2,city,postal_code FROM customer_addresses WHERE user_id=?',parts[1]),all(db,'SELECT id,number,issued_at,total_minor,currency FROM customer_invoices WHERE user_id=? ORDER BY issued_at DESC LIMIT 100',parts[1])]);

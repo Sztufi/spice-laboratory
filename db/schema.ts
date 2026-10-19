@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 export const customers = sqliteTable('customers', {
   id: text('id').primaryKey(), email: text('email').notNull(), fullName: text('full_name').notNull().default(''),
   phone: text('phone').notNull().default(''), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
@@ -17,7 +17,7 @@ export const orders = sqliteTable('customer_orders', {
   shippingJson:text('shipping_json'),discountJson:text('discount_json'),
   number: text('number').notNull(), kind: text('kind').notNull().default('demo'), status: text('status').notNull(),
   totalMinor: integer('total_minor').notNull(), currency: text('currency').notNull(), itemsJson: text('items_json').notNull(), createdAt: text('created_at').notNull()
-}, table => [uniqueIndex('order_user_request').on(table.userId, table.requestId)]);
+}, table => [uniqueIndex('order_user_request').on(table.userId, table.requestId),index('orders_analytics_date').on(table.createdAt,table.id),index('orders_analytics_scope').on(table.kind,table.status,table.createdAt)]);
 export const invoices = sqliteTable('customer_invoices', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), orderId: text('order_id').references(() => orders.id),
   number: text('number').notNull(), issuedAt: text('issued_at').notNull(), totalMinor: integer('total_minor').notNull(),

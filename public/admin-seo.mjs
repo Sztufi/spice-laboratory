@@ -1,3 +1,4 @@
+import {styleIcons} from './brand-icons.mjs';
 import {seoPages} from './seo-data.mjs';
 import {escapeHtml as h} from './product-markup.mjs';
 export function seoFields(value={},prefix='edit'){
@@ -35,7 +36,7 @@ export function mountSeoPanel(root,data,api,refresh){
   const path=button.dataset.seoPage,defaults=seoPages.find(p=>p.path===path);if(!defaults)return;
   const value={...defaults,...settings.pages?.[path]};
   const editor=root.querySelector('#seo-page-editor');editor.hidden=false;
-  editor.innerHTML=`<h2>${h(defaults.label)} · SEO</h2><form id="seo-page-form" data-path="${h(path)}" class="editor-form">${seoFields(value,'seo-page')}<button type="submit" class="button yellow">OLDAL SEO MENTÉSE</button><p role="status" data-seo-status></p></form>`;
+  editor.innerHTML=styleIcons(`<h2>${h(defaults.label)} · SEO</h2><form id="seo-page-form" data-path="${h(path)}" class="editor-form">${seoFields(value,'seo-page')}<button type="submit" class="button yellow">OLDAL SEO MENTÉSE</button><p role="status" data-seo-status></p></form>`);
   mountSeoPreview(editor,defaults);editor.querySelector('input')?.focus();
  };
  const onSubmit=async event=>{

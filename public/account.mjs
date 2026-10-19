@@ -1,10 +1,12 @@
+import {brandIcon} from './brand-icons.mjs';
+import {styleIcons} from './brand-icons.mjs';
 import { formatMoney } from './money.mjs';
 import { catalogue } from './catalogue.mjs';
 import {mountGoogleLogin,logoutGoogle} from './google-login.mjs';
 import {refreshCommerceIdentity} from './commerce.mjs';
 const $=selector=>document.querySelector(selector);
 const h=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const heart='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+const heart=brandIcon('heart');
 const products=new Map(catalogue.products.map(product=>[product.id,product]));
 const FAVORITES_KEY='spice-lab:guest-favorites:v1';
 let favorites=new Set(),state=null,status='loading',activeTab='profile',favoriteOnly=new URLSearchParams(location.search).get('favorites')==='1';
@@ -73,14 +75,14 @@ function settingsPanel(){const requested=state.requests.some(item=>item.kind==='
 function renderAccount(){
  const names={profile:'SAJÁT ADATOK',addresses:'CÍMEIM',favorites:'KEDVENCEIM',orders:'RENDELÉSEIM',invoices:'SZÁMLÁIM',settings:'BEÁLLÍTÁSOK'};
  $('#account-title').textContent=names[activeTab];
- $('#account-tabs').innerHTML=Object.entries(names).map(([id,name])=>`<button id="account-tab-${id}" type="button" role="tab" aria-controls="account-panel" aria-selected="${activeTab===id}" tabindex="${activeTab===id?0:-1}" data-account-tab="${id}">${name}${id==='favorites'&&favorites.size?` (${favorites.size})`:''}</button>`).join('');
+ $('#account-tabs').innerHTML=styleIcons(Object.entries(names).map(([id,name])=>`<button id="account-tab-${id}" type="button" role="tab" aria-controls="account-panel" aria-selected="${activeTab===id}" tabindex="${activeTab===id?0:-1}" data-account-tab="${id}">${name}${id==='favorites'&&favorites.size?` (${favorites.size})`:''}</button>`).join(''));
  $('#account-panel').setAttribute('aria-labelledby',`account-tab-${activeTab}`);
  $('#account-identity').textContent=state?.authenticated?(state.user.fullName||state.user.email):status==='loading'?'Fiók betöltése…':'SPICE LABORATORY';
- if(activeTab==='favorites')$('#account-panel').innerHTML=favoritePanel();
- else if(status==='loading')$('#account-panel').innerHTML='<p class="account-description" role="status">Fiók betöltése…</p>';
- else if(status==='unavailable')$('#account-panel').innerHTML='<div class="account-empty"><h3>A FIÓK MOST NEM ELÉRHETŐ.</h3><p>A mentett adataidat nem módosítottuk. Próbáld újra később.</p><button type="button" class="secondary-button" id="retry-account">Újrapróbálás</button></div>';
- else if(!state?.authenticated)$('#account-panel').innerHTML=loginPanel();
- else $('#account-panel').innerHTML=({profile:profilePanel,addresses:addressesPanel,orders:ordersPanel,invoices:invoicesPanel,settings:settingsPanel}[activeTab]||profilePanel)();
+ if(activeTab==='favorites')$('#account-panel').innerHTML=styleIcons(favoritePanel());
+ else if(status==='loading')$('#account-panel').innerHTML=styleIcons('<p class="account-description" role="status">Fiók betöltése…</p>');
+ else if(status==='unavailable')$('#account-panel').innerHTML=styleIcons('<div class="account-empty"><h3>A FIÓK MOST NEM ELÉRHETŐ.</h3><p>A mentett adataidat nem módosítottuk. Próbáld újra később.</p><button type="button" class="secondary-button" id="retry-account">Újrapróbálás</button></div>');
+ else if(!state?.authenticated)$('#account-panel').innerHTML=styleIcons(loginPanel());
+ else $('#account-panel').innerHTML=styleIcons(({profile:profilePanel,addresses:addressesPanel,orders:ordersPanel,invoices:invoicesPanel,settings:settingsPanel}[activeTab]||profilePanel)());
  if(!state?.authenticated&&$('#account-dialog').open)mountGoogleLogin($('#account-panel'),afterGoogleLogin);
 }
 async function afterGoogleLogin(){await loadAccount();await refreshCommerceIdentity();renderAccount();window.dispatchEvent(new CustomEvent('spice:account-login'));}

@@ -1,0 +1,11 @@
+.brand-icon{display:inline-block;vertical-align:-.15em;flex-shrink:0;fill:currentColor;stroke:none;overflow:visible}
+.brand-icon path{stroke:none}
+.menu-item-icon,.account-entry-icon{color:#000}
+.favorite-button .brand-icon,.favorite-remove .brand-icon{fill:currentColor}
+.favorite-button.is-favorite{color:#17130f;background:var(--pink)}
+.favorite-button.is-favorite .brand-icon,.favorite-remove .brand-icon{fill:currentColor}
+.confirmation-mark .brand-icon{width:36px;height:36px}
+.category-tile-arrow .brand-icon{width:23px;height:23px}
+.account-entry-icon{color:#000}
+.faq-item>summary:after{content:'';display:block;flex:0 0 20px;width:20px;height:20px;background:currentColor;clip-path:polygon(40% 3%,60% 0,60% 38%,98% 35%,100% 60%,60% 63%,60% 98%,36% 95%,39% 63%,0 63%,3% 40%,40% 40%)}
+.faq-item[open]>summary:after{content:'';clip-path:polygon(3% 40%,96% 35%,100% 60%,0 64%)}

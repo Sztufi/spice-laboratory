@@ -1,4 +1,5 @@
 import {productExperience} from './product-experience.mjs';
+import {styleIcons} from '../public/brand-icons.mjs';
 import {menuIcon} from './menu-icon.mjs';
 import {accountIcon} from './account-icon.mjs';
 import {homeExperience} from './home-experience.mjs';
@@ -117,6 +118,7 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  html=html.replace('</body>',`<script type="application/json" id="store-catalogue">${JSON.stringify({...catalogue,products:catalogue.products.map(({sourceUrl,imageSource,...product})=>product)}).replace(/</g,'\\u003c')}</script><script type="module" src="/pages.mjs"></script></body>`);
  html=optimizeImages(html);
  html=html.replace('</head>','<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800;900&family=DM+Sans:wght@400;600;700&display=swap"></head>');
+ html=styleIcons(html).replace('</head>','<link rel="stylesheet" href="/brand-icons.css"></head>');
  return {html,status,title:fullTitle};
 }
 

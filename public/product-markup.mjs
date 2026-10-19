@@ -1,8 +1,9 @@
+import {brandIcon} from './brand-icons.mjs';
 import { catalogue } from './catalogue.mjs';
 import { formatMoney } from './money.mjs';
 import {imageAttributes} from './image-attrs.mjs';
 export const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const heartIcon='<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+export const heartIcon=brandIcon('heart');
 export function defaultFavorite(product){return `<button class="favorite-button" type="button" data-favorite="${escapeHtml(product.id)}" aria-pressed="false" aria-label="${escapeHtml(product.name)} hozzáadása a kedvencekhez">${heartIcon}</button>`;}
 export function productCard(product,favoriteHtml=defaultFavorite(product),activeCatalogue=catalogue){
  const h=escapeHtml,featured=product.ingredients.filter(item=>!['sea-salt','cane-sugar','brown-sugar','raw-sugar','rapeseed-oil'].includes(item.id)).slice(0,2),rest=product.ingredients.length-featured.length;

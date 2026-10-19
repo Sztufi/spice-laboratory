@@ -1,3 +1,4 @@
+import {styleIcons} from './brand-icons.mjs';
 import { openAccount,favoriteButtonMarkup } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
 import {purchaseQuantity,purchaseCost} from './product-purchase.mjs';
@@ -38,7 +39,7 @@ if(quantityInput&&product){
   for(const node of document.querySelectorAll('[data-purchase-total]'))node.textContent=formatMoney(product.priceMinor*quantity,'HUF');
   for(const node of document.querySelectorAll('[data-sticky-quantity]'))node.textContent=String(quantity);
   for(const button of document.querySelectorAll('[data-quantity-step]'))button.disabled=product.inStock===false||(Number(button.dataset.quantityStep)<0?quantity<=1:quantity>=99);
-  document.querySelector('[data-purchase-shipping]').innerHTML=purchaseCost(product,methods,quantity);
+  document.querySelector('[data-purchase-shipping]').innerHTML=styleIcons(purchaseCost(product,methods,quantity));
  }
  quantityInput.addEventListener('change',refreshPurchase);
  document.addEventListener('click',event=>{

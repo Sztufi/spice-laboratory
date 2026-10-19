@@ -1,3 +1,4 @@
+import {styleIcons} from './brand-icons.mjs';
 const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=(value,currency='HUF')=>value===null||value===undefined?'—':new Intl.NumberFormat('hu-HU',{style:'currency',currency,minimumFractionDigits:0,maximumFractionDigits:2}).format(value/100);
 const number=value=>value===null||value===undefined?'—':new Intl.NumberFormat('hu-HU',{maximumFractionDigits:2}).format(value);
@@ -51,17 +52,17 @@ export function mountReports(root,api,{archive=false}={}){
  async function load(page=1){
   const token=++request;params=read();if(archive)params.set('page',String(page));
   const query=params.toString();history.replaceState(null,'','/admin?tab='+(archive?'archive':'analytics')+'&'+query);
-  results.setAttribute('aria-busy','true');results.innerHTML='';status.textContent=archive?'Archívum betöltése…':'Elemzés számítása…';
-  try{const value=await api((archive?'/archive':'/analytics')+'?'+query);if(!active||token!==request||!results.isConnected)return;report=value;pages={};results.innerHTML=archive?archiveMarkup(report,params):reportMarkup(report,params,pages,section);status.textContent=archive?`${number(report.total)} találat.`:`${number(report.totals.orders)} rendelés az elemzésben. A tesztadatok és az éles adatok nem keverednek.`;}
-  catch(error){if(token!==request||!results.isConnected)return;results.innerHTML='<div class="report-empty"><strong>Az adatok most nem jeleníthetők meg.</strong><p>'+h(error.message)+'</p></div>';status.textContent='Az elemzés nem készült el. A korábbi adatokat nem mutatjuk friss eredményként.';}
+  results.setAttribute('aria-busy','true');results.innerHTML=styleIcons('');status.textContent=archive?'Archívum betöltése…':'Elemzés számítása…';
+  try{const value=await api((archive?'/archive':'/analytics')+'?'+query);if(!active||token!==request||!results.isConnected)return;report=value;pages={};results.innerHTML=styleIcons(archive?archiveMarkup(report,params):reportMarkup(report,params,pages,section));status.textContent=archive?`${number(report.total)} találat.`:`${number(report.totals.orders)} rendelés az elemzésben. A tesztadatok és az éles adatok nem keverednek.`;}
+  catch(error){if(token!==request||!results.isConnected)return;results.innerHTML=styleIcons('<div class="report-empty"><strong>Az adatok most nem jeleníthetők meg.</strong><p>'+h(error.message)+'</p></div>');status.textContent='Az elemzés nem készült el. A korábbi adatokat nem mutatjuk friss eredményként.';}
   finally{if(token===request)results.setAttribute('aria-busy','false');}
  }
  form.addEventListener('submit',event=>{event.preventDefault();load();});
  const onClick=event=>{
   const period=event.target.closest('[data-period]');if(period){const tz=form.elements?.namedItem('tz')||form.querySelector('[name=tz]'),today=localDay(tz.value),key=period.dataset.period,to=archive||key==='month'&&today.endsWith('-01')?today:shift(today,-1);form.querySelector('[name=to]').value=to;form.querySelector('[name=from]').value=key==='all'?'1970-01-01':key==='month'?today.slice(0,7)+'-01':shift(to,-Number(key)+1);load();return;}
   const page=event.target.closest('[data-archive-page]');if(page&&!page.disabled){load(Number(page.dataset.archivePage));return;}
-  const tab=event.target.closest('[data-report-section]');if(tab&&report){section=tab.dataset.reportSection;results.innerHTML=reportMarkup(report,params,pages,section);results.querySelector(`[data-report-section="${section}"]`)?.focus?.({preventScroll:true});return;}
-  const tablePage=event.target.closest('[data-table-page]');if(tablePage&&!tablePage.disabled&&report){pages[tablePage.dataset.tablePage]=Number(tablePage.dataset.page);results.innerHTML=reportMarkup(report,params,pages,section);}
+  const tab=event.target.closest('[data-report-section]');if(tab&&report){section=tab.dataset.reportSection;results.innerHTML=styleIcons(reportMarkup(report,params,pages,section));results.querySelector(`[data-report-section="${section}"]`)?.focus?.({preventScroll:true});return;}
+  const tablePage=event.target.closest('[data-table-page]');if(tablePage&&!tablePage.disabled&&report){pages[tablePage.dataset.tablePage]=Number(tablePage.dataset.page);results.innerHTML=styleIcons(reportMarkup(report,params,pages,section));}
  };
  root.addEventListener('click',onClick);mounts.set(root,()=>{active=false;request++;root.removeEventListener('click',onClick);});
  load();

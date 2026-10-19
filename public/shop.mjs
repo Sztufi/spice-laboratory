@@ -3,6 +3,7 @@ import { categoryPath } from './page-data.mjs';
 import { renderCheckout, checkoutSelection, shippingOverview } from './checkout.mjs';
 import { commerceApi } from './commerce.mjs';
 import { formatMoney } from './money.mjs';
+import {purchaseQuantity} from './product-purchase.mjs';
 import { getCommerceConfig, startStripeCheckout, initCommerce } from './commerce.mjs';
 import { initAccount, isFavorite, favoritesFilterEnabled, favoriteProductIds, favoriteButtonMarkup, clearFavoritesFilter, archiveDemoOrder } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
@@ -163,7 +164,7 @@ function showProduct(id) {
   openDialog('product-dialog');
 }
 
-function addToCart(id) {
+function addToCart(id, requestedQuantity=1) {
   const product = productsById.get(id);
   if (!product) return;
   if(product.inStock===false){toast('Ez a termék átmenetileg nem elérhető.',false);return;}
@@ -174,11 +175,12 @@ function addToCart(id) {
     toast(`A demóban legfeljebb ${MAX_QUANTITY} db választható termékenként.`);
     return;
   }
-  cart = setQuantity(cart, id, previous + 1, catalogue.products);
+  const added=Math.min(purchaseQuantity(requestedQuantity),MAX_QUANTITY-previous);
+  cart = setQuantity(cart, id, previous + added, catalogue.products);
   persistCart();
   if ($('#product-dialog').open) $('#product-dialog').close();
     if ($('#account-dialog').open) $('#account-dialog').close();
-  toast(`${product.name} a kosaradban.`);
+  toast(`${added} db ${product.name} a kosaradban.${added<purchaseQuantity(requestedQuantity)?' Elérted a termékenkénti 99 db-os korlátot.':''}`);
 }
 
 function renderCart() {
@@ -270,7 +272,7 @@ document.addEventListener('click', event => {
   const { id } = action.dataset;
   switch (action.dataset.action) {
     case 'detail': showProduct(id); break;
-    case 'add': addToCart(id); break;
+    case 'add': addToCart(id,action.hasAttribute('data-use-product-quantity')?$('#product-quantity')?.value:1); break;
     case 'checkout': showCheckout(); break;
     case 'back-cart': renderCart(); $('#cart-content').scrollTop = 0; break;
     case 'continue':

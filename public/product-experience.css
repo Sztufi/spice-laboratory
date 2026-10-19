@@ -1,0 +1,62 @@
+/* Focused purchase hierarchy; existing brand tokens and navigation are retained. */
+.product-experience{grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:5%;margin-top:24px}
+.product-experience .product-page-photo{aspect-ratio:1/1;border-radius:6px;position:sticky;top:24px}
+.product-zoom-trigger{display:block;width:100%;height:100%;padding:0;border:0;background:none;cursor:zoom-in;color:var(--ink)}
+.product-zoom-trigger img{object-fit:contain}
+.zoom-label{position:absolute;bottom:14px;right:14px;min-height:44px;display:flex;align-items:center;padding:8px 12px;background:var(--cream);border-radius:4px;font:600 12px 'DM Sans',sans-serif}
+.product-experience .section-kicker{margin:0 0 12px;font-size:11px}
+.product-experience .product-page-title{font-size:clamp(42px,4.4vw,64px);line-height:.98;margin:0 0 10px}
+.product-experience .product-page-subtitle{margin:0 0 14px;color:var(--ink);font-size:16px;font-weight:600}
+.product-page-subtitle span{font-weight:400;white-space:nowrap}
+.product-experience .product-use{font-size:15px;line-height:1.6;margin-bottom:20px}
+.purchase-panel{border-top:1px solid #17130f26;padding-top:18px;scroll-margin-top:24px}
+.product-experience .product-page-price{font-size:30px;margin:0 0 4px;line-height:1.2}
+.product-page-price del{font-size:16px;color:#655b50;font-weight:400}
+.product-page-price small{font-size:12px;margin-left:10px}
+.unit-price{font-size:13px;margin:0 0 18px;color:#655b50}
+.unit-price>span{display:block;font-size:11px;margin-top:4px}
+.product-experience .product-page-actions{align-items:end;gap:10px}
+.pdp-quantity{flex:none}.pdp-quantity label{display:block;font-size:11px;font-weight:600;margin-bottom:6px}
+.pdp-quantity>div{display:flex;align-items:center;height:52px;border:1px solid #b9b09d;border-radius:4px;overflow:hidden}
+.pdp-quantity>div:focus-within{outline:3px solid #a643af;outline-offset:4px}
+.pdp-quantity button{width:38px;min-height:50px;background:transparent;border:0;font-size:22px;color:var(--ink);cursor:pointer}
+.pdp-quantity button:disabled{opacity:.35;cursor:default}
+.pdp-quantity input{width:30px;min-height:48px;border:0;background:transparent;text-align:center;font:600 15px 'DM Sans',sans-serif;appearance:textfield;color:var(--ink)}
+.pdp-quantity input::-webkit-inner-spin-button,.pdp-quantity input::-webkit-outer-spin-button{appearance:none;margin:0}
+.product-experience .pdp-add{min-height:52px;flex-direction:column;gap:3px;padding:8px 14px;font-size:14px}
+.pdp-add>span{font-size:11px;font-weight:500}
+.product-experience .product-page-actions .favorite-button{height:52px;width:48px;background:transparent;border:1px solid #b9b09d}
+.purchase-links{margin-top:12px;display:flex;flex-wrap:wrap;gap:3px 18px;font-size:12px;line-height:1.6}
+.purchase-links a{color:var(--ink);min-height:36px;display:inline-flex;align-items:center;text-underline-offset:3px}
+.purchase-links>span{font-size:11px;color:#655b50;display:flex;align-items:center}
+.purchase-panel .shipping-overview{margin:12px 0 0;padding:14px 0;border-block:1px solid #17130f26;background:transparent}
+.shipping-overview strong{font-size:13px}.shipping-overview p{font-size:12px;line-height:1.65}
+.purchase-help-links{display:flex;flex-wrap:wrap;gap:0 18px}
+.purchase-help-links a{color:#655b50;font-size:11px;min-height:44px;display:inline-flex;align-items:center;text-underline-offset:3px}
+.product-experience .store-preview{margin:0;font-size:11px}
+#product-ingredients{scroll-margin-top:24px}
+.source-details summary{cursor:pointer;min-height:44px}
+.product-image-dialog{width:min(92vw,760px);max-height:92dvh;padding:18px;background:var(--cream);border:1px solid var(--ink);border-radius:8px;overflow:auto;color:var(--ink)}
+.product-image-dialog::backdrop{background:#17130fcc}
+.product-image-dialog .dialog-header{padding:0 0 12px;gap:15px}
+.product-image-dialog h2{font:800 28px 'Barlow Condensed',sans-serif;margin:0}
+.product-image-dialog>img{display:block;width:100%;height:auto;max-height:70dvh;object-fit:contain}
+.product-image-dialog>p{font-size:12px;line-height:1.6;margin:10px 0 0}
+.mobile-product-buy[hidden]{display:none!important}
+@media(max-width:800px){
+ .product-experience{grid-template-columns:1fr;gap:18px;margin-top:18px}
+ .product-experience .product-page-photo{position:relative;top:auto;aspect-ratio:1.28/1;max-height:380px}
+ .product-experience .product-page-photo img{object-fit:contain}
+ .product-experience .product-page-title{font-size:clamp(36px,9vw,48px)}
+ .product-experience .product-page-subtitle{font-size:14px;margin-bottom:10px}
+ .product-experience .product-use{font-size:14px;margin-bottom:16px}
+ .purchase-panel{padding-top:14px}.product-experience .section-kicker{margin-bottom:8px}
+ .mobile-product-buy{display:flex;position:fixed;z-index:5;bottom:0;inset-inline:0;align-items:center;justify-content:space-between;gap:12px;padding:10px 5% calc(10px + env(safe-area-inset-bottom));background:var(--cream);border-top:1px solid var(--ink);box-shadow:0 -4px 18px #17130f12}
+ .mobile-product-buy>div{min-width:0;display:grid;gap:3px;font-size:12px}.mobile-product-buy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .mobile-product-buy>div>span{font-size:11px;color:#655b50}
+ .mobile-product-buy .primary-button{flex:none;min-height:48px;width:auto;padding-inline:20px}
+ .has-sticky-purchase{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+ .dialog-open .mobile-product-buy{display:none}
+ .has-sticky-purchase .toast{bottom:calc(90px + env(safe-area-inset-bottom))}
+}
+@media(max-width:360px){.product-experience .product-page-actions{flex-wrap:wrap}.pdp-quantity{flex:1}.pdp-quantity>div{width:max-content}.product-experience .pdp-add{flex:1;min-width:120px}.product-page-actions [data-product-favorite]{margin-left:auto}.pdp-quantity button{width:36px}}

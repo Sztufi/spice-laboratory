@@ -1,0 +1,33 @@
+/* One primary shopping action, followed by products and cooking inspiration. */
+body[data-page=home] .hero{min-height:620px;height:auto;max-height:none;padding-block:58px 54px}
+body[data-page=home] .copy{max-width:60%;pointer-events:auto}
+body[data-page=home] .hero h1{font-size:clamp(80px,9.1vw,142px);margin-bottom:24px}
+.hero-decision{position:relative;z-index:2;max-width:480px}
+.hero-description{font-size:17px;line-height:1.6;margin:0 0 20px;max-width:38ch}
+.hero-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px 22px}
+.hero-actions .primary-button{width:auto;min-height:52px;padding-inline:22px;text-decoration:none;font-size:12px;letter-spacing:.4px}
+.hero-recipe-link{font-size:13px;min-height:44px;display:inline-flex;align-items:center;color:var(--ink);text-underline-offset:4px}
+.motion-toggle{display:inline-flex;align-items:center;min-height:32px;margin-top:12px;padding:0;background:transparent;border:0;border-bottom:1px solid #17130f44;color:#655b50;font:11px 'DM Sans',sans-serif;cursor:pointer}
+.motion-paused .hero *{animation-play-state:paused!important}
+body[data-page=home] .eyebrow{letter-spacing:2px;margin-bottom:24px}
+body[data-page=home] .shop-heading{align-items:end;margin-bottom:30px}
+body[data-page=home] .shop-intro{max-width:39ch;font-size:14px;line-height:1.7}
+.home-recipes{max-width:1440px;margin:0 auto;padding:54px 5% 64px;border-top:1px solid #17130f26}
+.home-recipes-heading{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:end;margin-bottom:28px}
+.home-recipes-heading h2{font:900 clamp(38px,5vw,60px)/.98 'Barlow Condensed',Impact,sans-serif;letter-spacing:-.02em;margin:12px 0 0}
+.home-recipes-heading>div>p:not(.section-kicker){font-size:15px;line-height:1.7;max-width:43ch;margin:0 0 12px;color:#655b50}
+.home-recipes-heading .text-button{display:inline-flex;align-items:center;min-height:44px;color:var(--ink);font-size:12px}
+.home-recipes .recipe-card-copy h2{font-size:28px}
+@media(max-width:800px){
+ body[data-page=home] .hero{min-height:0;height:auto;padding:26px 5% 24px;grid-template-areas:"eyebrow eyebrow" "headline art" "decision decision";gap:20px 8px}
+ body[data-page=home] .copy{max-width:none;display:contents}
+ body[data-page=home] .eyebrow{margin:0;font-size:9px;letter-spacing:1.5px}
+ body[data-page=home] .hero h1{font-size:clamp(38px,12.7vw,100px);margin:0}
+ .hero-decision{grid-area:decision;max-width:none}
+ .hero-description{font-size:15px;max-width:44ch;margin:0 0 16px}
+ .hero-actions{gap:8px 20px}.hero-actions .primary-button{flex:1;min-width:220px;max-width:360px}
+ .hero-recipe-link{font-size:12px}
+ .home-recipes{padding:32px 5% 40px}.home-recipes-heading{grid-template-columns:1fr;gap:18px;margin-bottom:20px}
+ .home-recipes-heading h2{font-size:40px}.home-recipes-heading>div>p:not(.section-kicker){font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){.motion-toggle{display:none}}

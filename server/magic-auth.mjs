@@ -52,6 +52,7 @@ async function sendEmail(env,email,link,fetcher){
 /** @param {Request} request @param {{db:any,env?:Record<string,any>,fetcher?:typeof fetch}} ctx */
 export async function handleMagicAuth(request,{db,env={},fetcher=fetch}){
  const url=new URL(request.url),path=url.pathname.replace(/^\/api\/auth\/magic\/?/,'');
+ let stage='request';
  if(request.method==='GET'&&path==='config')return json(magicConfig(env,url.origin));
  try{
   if(request.method!=='POST')return json({error:'Nem található.'},404);
@@ -68,6 +69,7 @@ export async function handleMagicAuth(request,{db,env={},fetcher=fetch}){
    const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
    if(email.length>254||!/^[-\w.!#$%&'*+/=?^`{|}~]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,63}$/.test(email))fail(400,'Adj meg egy érvényes e-mail-címet.');
    await limit(db,'email-minute|'+email,60,1);await limit(db,'email-hour|'+email,3600,5);await limit(db,'global-email',3600,200);
+   stage='identity';
    let identity=await q(db,'SELECT user_id FROM email_login_identities WHERE email=?',email).first();
    let userId=identity?.user_id||'email:'+await hash(email);
    if(body.link===true){
@@ -76,8 +78,9 @@ export async function handleMagicAuth(request,{db,env={},fetcher=fetch}){
     userId=user.userId;
    }
    const token=random(),browser=readCookie(request,BROWSER)||random(),tokenHash=await hash(token);
+   stage='pending-link';
    await db.batch([q(db,'DELETE FROM email_login_links WHERE expires_at<?',now()),q(db,'DELETE FROM email_customer_sessions WHERE expires_at<?',now()),q(db,'DELETE FROM email_login_throttle WHERE expires_at<?',now()),q(db,'INSERT INTO email_login_links(token_hash,email,user_id,browser_hash,expires_at,ready) VALUES(?,?,?,?,?,0)',tokenHash,email,userId,await hash(browser),now()+600)]);
-   try{await sendEmail(env,email,url.origin+'/fiok#magic='+token,fetcher);await q(db,'UPDATE email_login_links SET ready=1 WHERE token_hash=?',tokenHash).run();}
+   try{stage='provider-send';await sendEmail(env,email,url.origin+'/fiok#magic='+token,fetcher);stage='activate-link';await q(db,'UPDATE email_login_links SET ready=1 WHERE token_hash=?',tokenHash).run();}
    catch(error){await q(db,'DELETE FROM email_login_links WHERE token_hash=?',tokenHash).run();throw error;}
    const response=json({sent:true,message:'Elküldtük a belépési linkedet. Nézd meg a postaládádat és a spam mappát is.'});response.headers.append('Set-Cookie',cookie(BROWSER,browser,600));return response;
   }
@@ -99,5 +102,5 @@ export async function handleMagicAuth(request,{db,env={},fetcher=fetch}){
   if(old)statements.push(q(db,'DELETE FROM email_customer_sessions WHERE token_hash=?',await hash(old)));
   statements.push(q(db,'INSERT INTO email_customer_sessions(token_hash,user_id,expires_at,created_at) SELECT ?,user_id,?,? FROM email_login_identities WHERE email=?',await hash(token),now()+AGE,now(),used.email));await db.batch(statements);
   const response=json({authenticated:true,provider:'magic'});response.headers.append('Set-Cookie',cookie(SESSION,token,AGE));return response;
- }catch(error){return json({error:error.status?error.message:'Az e-mailes belépés átmenetileg nem érhető el.'},error.status||503);}
+ }catch(error){if(!error.status)console.error(JSON.stringify({component:'magic-login',stage,errorType:['TypeError','AbortError','TimeoutError'].includes(error.name)?error.name:'Error'}));return json({error:error.status?error.message:'Az e-mailes belépés átmenetileg nem érhető el.'},error.status||503);}
 }

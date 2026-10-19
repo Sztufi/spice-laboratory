@@ -86,10 +86,11 @@ test('order fulfillment stays separate from payment and customer APIs never expo
  assert.equal((await (await handleAccountRequest(request('/api/account'),{db,user:buyer,env})).json()).orders[0].items[0].name,'Fries Salt');
 });
 test('media uploads require real image signatures and private invoices remain admin-only',async()=>{
- const {db,sqlite}=database();let writes=0,reads=0;const bucket={async put(key){writes++;assert.match(key,/^store-media\/[a-f0-9-]{36}\.png$/);},async get(){reads++;return {body:new TextEncoder().encode('%PDF-test')};}};
+ const {db,sqlite}=database();let writes=0,reads=0;const bucket={async put(key){writes++;assert.match(key,/^store-media\/[a-f0-9-]{36}-opt(?:-(?:160|320|640|960))?\.webp$/);},async get(){reads++;return {body:new TextEncoder().encode('%PDF-test')};}};
  const upload=async(bytes,type='image/png')=>{const form=new FormData();form.append('file',new File([bytes],'test.png',{type}));return handleAdminRequest(new Request(origin+'/api/admin/media',{method:'POST',headers:{Origin:origin},body:form}),{db,user:owner,env,bucket});};
  assert.equal((await upload('<script>evil</script>')).status,400);assert.equal(writes,0);
- const png=Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73]);assert.equal((await upload(png)).status,201);assert.equal(writes,1);
+ const png=Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,13,73]);assert.equal((await upload(png)).status,400);assert.equal(writes,0);
+ const photo=readFileSync(new URL('../public/assets/products/condiment-bagel-crisps-kick.jpg',import.meta.url));assert.equal((await upload(photo,'image/jpeg')).status,201);assert.equal(writes,5);
  await handleAccountRequest(request('/api/account/profile','PUT',{fullName:'Buyer'}),{db,user:buyer,env});sqlite.prepare('INSERT INTO customer_invoices(id,user_id,number,issued_at,total_minor,currency,object_key,created_at) VALUES(?,?,?,?,?,?,?,?)').run('private-invoice',buyer.userId,'I-1','2026-10-19',275000,'HUF','private/invoice.pdf','2026-10-19');
  assert.equal((await admin(db,'/invoices/private-invoice/download','GET',undefined,buyer,{bucket})).status,403);assert.equal(reads,0);assert.equal((await admin(db,'/invoices/private-invoice/download','GET',undefined,owner,{bucket})).status,200);assert.equal(reads,1);
 });

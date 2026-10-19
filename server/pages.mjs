@@ -1,6 +1,7 @@
 import {productExperience} from './product-experience.mjs';
 import {homeExperience} from './home-experience.mjs';
 import {seoDocument} from './seo.mjs';
+import {optimizeImages} from './image-markup.mjs';
 import {ingredientDetails} from '../public/ingredient-copy.mjs';
 import { seedCatalogue } from '../public/catalogue.mjs';
 import {recipeSeeds} from '../public/recipe-data.mjs';
@@ -103,7 +104,7 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  if(path==='/'&&recipes.length)content+=`<section class="home-recipes" aria-labelledby="home-recipes-title"><div class="home-recipes-heading"><div><p class="section-kicker">A KONYHÁD A LABOR.</p><h2 id="home-recipes-title">MEGVAN A FŰSZER.<br>MI LEGYEN A KAJA?</h2></div><div><p>Nem hagyunk magadra egy üveg fűszerrel. Válassz receptet: mutatjuk a hozzávalókat, a lépéseket és a hozzá való keverékeket.</p>${link('/blog','MINDEN RECEPT →','text-button')}</div></div>${recipeCards(recipes.slice(0,3),catalogue)}</section>`;
  const metadata=seoDocument({path,search,status,title:path==='/'?title:title+' | Spice Laboratory',description,catalogue:{...catalogue,categories:categoryPages},recipes,settings:options.seo||{},env,origin,live:config.stripeEnabled&&config.mode==='live'});
  const fullTitle=metadata.title;
- let html=base.replace(/<title>[\s\S]*?<\/title>/,`<title>${h(fullTitle)}</title>`).replace(/<meta name="description" content="[^"]*">/,`<meta name="description" content="${h(metadata.description)}">`).replace('</head>',`<link rel="stylesheet" href="/pages.css"><link rel="stylesheet" href="/recipes.css"><link rel="stylesheet" href="/product-experience.css"><link rel="stylesheet" href="/home-experience.css">${metadata.tags}</head>`);
+ let html=base.replace(/<title>[\s\S]*?<\/title>/,`<title>${h(fullTitle)}</title>`).replace(/<meta name="description" content="[^"]*">/,`<meta name="description" content="${h(metadata.description)}">`).replace('</head>',`<link rel="stylesheet" href="/pages.css">${(path==='/'||path.startsWith('/blog')||path.startsWith('/termek/')?'<link rel="stylesheet" href="/recipes.css">':'')}${path.startsWith('/termek/')?'<link rel="stylesheet" href="/product-experience.css">':''}${path==='/'?'<link rel="stylesheet" href="/home-experience.css">':''}${metadata.tags}</head>`);
  html=html.replace('<body>',`<body data-page="${path==='/'?'home':'interior'}"${category?` data-page-category="${category.id}"`:''}><a class="skip-link" href="#main-content">Ugrás a tartalomhoz</a>`);
  html=html.replace(/<main>[\s\S]*?<\/main>/,`<main id="main-content"${path==='/'?'':' class="inner-page"'} tabindex="-1">${content}</main>`);
  html=html.replace(/<p class="source-note">[\s\S]*?<\/p>/,config.stripeEnabled?'<p class="source-note">'+(config.mode==='test'?'STRIPE TESZTMÓD · Nem történik valódi pénzmozgás.':'Fizetés a Stripe felületén.')+'</p>':'<p class="source-note">WEBSHOP DEMÓ · Nem fogad valódi rendelést vagy fizetést.</p>');
@@ -112,6 +113,8 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  html=html.replace(/<footer class="store-footer">[\s\S]*?<\/footer>/,footer());
  html=html.replace('<dialog class="shop-dialog account-dialog"',menu(path)+'<dialog class="shop-dialog account-dialog"');
  html=html.replace('</body>',`<script type="application/json" id="store-catalogue">${JSON.stringify({...catalogue,products:catalogue.products.map(({sourceUrl,imageSource,...product})=>product)}).replace(/</g,'\\u003c')}</script><script type="module" src="/pages.mjs"></script></body>`);
+ html=optimizeImages(html);
+ html=html.replace('</head>','<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800;900&family=DM+Sans:wght@400;600;700&display=swap"></head>');
  return {html,status,title:fullTitle};
 }
 

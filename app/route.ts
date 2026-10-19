@@ -11,7 +11,7 @@ export async function GET(request: Request) {
  if(url.pathname.length>1&&url.pathname.endsWith('/')){url.pathname=url.pathname.replace(/\/+$/,'');return Response.redirect(url.href,308);}
  const headers={'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'};
  if(url.pathname.startsWith('/media/')){
-  const filename=url.pathname.slice(7);if(!/^[a-f0-9-]{36}\.(png|jpg|webp)$/.test(filename)||!env.BUCKET)return new Response('Nem található.',{status:404});
+  const filename=url.pathname.slice(7);if(!/^[a-f0-9-]{36}(?:-opt(?:-r)?(?:-(?:160|320|640|960))?)?\.(png|jpg|webp)$/.test(filename)||!env.BUCKET)return new Response('Nem található.',{status:404});
   const object=await env.BUCKET.get('store-media/'+filename);if(!object)return new Response('Nem található.',{status:404});
   return new Response(object.body,{headers:{'Content-Type':object.httpMetadata?.contentType||'application/octet-stream','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
  }
@@ -22,7 +22,9 @@ export async function GET(request: Request) {
   return new Response(adminPage(),{headers});
  }
  try{
-  const [store,settings]=await Promise.all([loadStore(env.DB),runtimeEnv(env.DB,env)]);
+  const store=await loadStore(env.DB);
+  const shipping=store.settings.find((item:{id:string;methods:unknown})=>item.id==='shipping');
+  const settings=shipping?{...env,SHIPPING_METHODS_JSON:JSON.stringify(shipping.methods)}:env;
   const redirect=seoRedirect(url.pathname,store.catalogue.categories);if(redirect){url.pathname=redirect;return Response.redirect(url.href,308);}
   const special=seoEndpoint(url.pathname,store,settings,url.origin);if(special)return special;
   const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,seo:seoSetting(store),isAdmin});

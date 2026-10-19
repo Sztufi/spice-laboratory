@@ -3,6 +3,7 @@ import {shippingMethods} from './shipping.mjs';
 import {analyticsEndpoint} from './admin-analytics.mjs';
 import {seoState,seoSetting} from './seo.mjs';
 import {seoPages} from '../public/seo-data.mjs';
+import {processImage} from './image-processing.mjs';
 import {commerceConfig} from './commerce.mjs';
 import {assertSameOrigin} from './account.mjs';
 import {cartTotals} from '../public/shop-core.mjs';
@@ -108,10 +109,13 @@ async function upload(request,{db,bucket,user}){
  else if(data.length>3&&data[0]===255&&data[1]===216&&data[2]===255){extension='jpg';mime='image/jpeg';}
  else if(new TextDecoder().decode(data.slice(0,4))==='RIFF'&&new TextDecoder().decode(data.slice(8,12))==='WEBP'){extension='webp';mime='image/webp';}
  else fail(400,'JPG-, PNG- vagy WebP-képfájl szükséges.');
- const id=crypto.randomUUID(),filename=id+'.'+extension,url='/media/'+filename;
- await bucket.put('store-media/'+filename,data,{httpMetadata:{contentType:mime}});
- await save(db,user,'media',{id,url,name:text(file.name,180)||filename,status:'published',revision:'new'},true);
- return json({saved:true,url},201);
+ const profile=form.get('profile')==='recipe'?'recipe':'product';
+ let processed;try{processed=await processImage(data,{fit:form.get('fit')==='cover'?'cover':'contain',profile});}catch(error){fail(400,error.message||'A képet nem sikerült feldolgozni.');}
+ const id=crypto.randomUUID(),prefix=id+'-opt'+(profile==='recipe'?'-r':''),filename=prefix+'.webp',url='/media/'+filename;
+ for(const image of processed.files)await bucket.put('store-media/'+prefix+image.suffix+'.webp',image.bytes,{httpMetadata:{contentType:'image/webp',cacheControl:'public, max-age=31536000, immutable'}});
+ const originalBytes=data.length,storedBytes=processed.files[0].bytes.length;
+ await save(db,user,'media',{id,url,name:text(file.name,180)||filename,width:processed.files[0].width,height:processed.files[0].height,originalBytes,storedBytes,fit:processed.fit,profile,variants:processed.files.map(({suffix,width,height,bytes})=>({url:'/media/'+prefix+suffix+'.webp',width,height,bytes:bytes.length})),status:'published',revision:'new'},true);
+ return json({saved:true,url,originalBytes,storedBytes,variants:processed.files.length},201);
 }
 const csvCell=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';
 export async function handleAdminRequest(request,ctx){

@@ -1,5 +1,7 @@
 .nav-icon{position:relative;display:grid;place-items:center;flex:none;width:44px;height:44px;padding:10px;border:0;border-radius:50%;background:transparent;cursor:pointer}
 .nav-icon svg{width:22px;height:22px}
+[data-account-content][hidden],#account-page-login[hidden],#account-tabs[hidden]{display:none!important}
+#account-page-login{max-width:520px;margin:28px 0 40px}
 .nav-icon:hover{background:#17130f0c}
 .nav-badge{position:absolute;right:1px;top:1px;min-width:17px;height:17px;padding:1px 3px;border-radius:50%;background:var(--pink);font-size:9px;font-weight:700;line-height:15px}
 .product-card{padding:0 0 14px;border:0;border-bottom:1px solid #17130f29;border-radius:0;background:transparent}

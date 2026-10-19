@@ -1,4 +1,4 @@
-let scriptReady,initialization,challenge,successCallback;
+let scriptReady,initialization,challenge,successCallback,statusRoot;
 async function api(path,body){
  const response=await fetch('/api/auth/google/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
  const data=await response.json();if(!response.ok)throw new Error(data.error||'A Google-belépés nem sikerült.');return data;
@@ -12,7 +12,7 @@ function loadScript(){
  });
  return scriptReady;
 }
-function status(message){const node=document.querySelector('[data-google-status]');if(node)node.textContent=message;}
+function status(message){const node=statusRoot?.querySelector('[data-google-status]');if(node)node.textContent=message;}
 async function initialize(){
  const config=await api('config');if(!config.enabled)throw new Error('A Google-belépés ezen a webcímen még nem érhető el.');
  await loadScript();
@@ -25,6 +25,7 @@ async function initialize(){
  return Date.now();
 }
 export async function mountGoogleLogin(root,onSuccess,reset=false){
+ statusRoot=root;
  const button=root.querySelector('[data-google-button]');if(!button)return;
  if(button.dataset.googleMounted==='true'&&!reset)return;
  button.dataset.googleMounted='true';

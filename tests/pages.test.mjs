@@ -29,7 +29,7 @@ test('unknown pages are actual 404s and query text cannot inject HTML',()=>{
 });
 test('every internal page link resolves and information pages do not include a hidden duplicate catalogue',()=>{
  for(const path of paths){const {html}=page(path);
- for(const [,href] of html.matchAll(/href="(\/[^"#?]*)[^"\n]*"/g)){if(/\.(css|mjs)$/.test(href)||href.startsWith('/assets/'))continue;assert.equal(page(href).status,200,path+' -> '+href);}
+ for(const [,href] of html.matchAll(/href="(\/[^"#?]*)[^"\n]*"/g)){if(/\.(css|mjs)$/.test(href)||href.startsWith('/assets/')||['/signin-with-chatgpt','/signout-with-chatgpt','/callback'].includes(href))continue;assert.equal(page(href).status,200,path+' -> '+href);}
  }
  for(const path of ['/rolunk','/kapcsolat','/gyik','/aszf'])assert.ok(!page(path).html.includes('id="product-grid"'));
 });

@@ -6,6 +6,7 @@ import {adminPage} from '../server/admin-page.mjs';
 import {getChatGPTUser} from './chatgpt-auth';
 import {seoEndpoint,seoSetting,seoRedirect} from '../server/seo.mjs';
 import {staticImageResponse} from '../server/image-response.mjs';
+import {googleCustomer} from '../server/google-auth.mjs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
  const url=new URL(request.url);
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
   const settings=shipping?{...env,SHIPPING_METHODS_JSON:JSON.stringify(shipping.methods)}:env;
   const redirect=seoRedirect(url.pathname,store.catalogue.categories);if(redirect){url.pathname=redirect;return Response.redirect(url.href,308);}
   const special=seoEndpoint(url.pathname,store,settings,url.origin);if(special)return special;
-  const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,seo:seoSetting(store),isAdmin});
+  const authenticated=Boolean(user||await googleCustomer(request,env.DB,env));
+  const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,seo:seoSetting(store),isAdmin,authenticated});
   return new Response(page.html,{status:page.status,headers});
  }catch{return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Átmenetileg nem elérhető</title><h1>Az oldal átmenetileg nem elérhető.</h1><p>Próbáld újra később.</p></html>',{status:503,headers});}
 }

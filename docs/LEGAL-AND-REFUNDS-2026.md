@@ -49,4 +49,4 @@ Nincs automatikus pénz-visszautalási művelet, számlastornó, chargeback-elsz
 
 ## SVG-karakterek
 
-Új, saját vektorrajzok: `public/assets/mascot-chef.svg`, `mascot-mail.svg`, `mascot-runner.svg`. A meglévő hero figura vastag fekete kontúrját, krémszínű testét, nagy szemét és gumiszerű végtagjait követik. A séf a főoldali recepteknél és a blogon, a levélhozó a hírlevélnél, a futó a szállításnál látszik. Nincs külső SVG-hivatkozás, raszterbeágyazás, font vagy JavaScript az SVG-kben. A dekoráció üres alt szöveget, fix képarányt és lazy betöltést használ; nincs új animáció. Mobilon a szövegfolyamban vagy kis díszként jelennek meg, nem fedik a mezőket és gombokat. A vektorok raszteres előnézete ellenőrizve; valódi mobil böngészős elrendezés-ellenőrzés ebben a környezetben nem elérhető.
+A három új figurát a tulajdonos kérésére 2026-10-19-én eltávolítottuk. A weboldal a hozzáadásuk előtti szekcióelrendezést használja; az eredeti hero-figura megmaradt.

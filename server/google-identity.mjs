@@ -1,4 +1,4 @@
-// Google customer identity verification. Owner/admin identity remains Sites-managed.
+// Google identity verification. Admin authorization requires a separate explicit grant.
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 const googleKeys=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 export async function verifyGoogleIdentity(token,{clientId,nonce,keySet=googleKeys}={}) {

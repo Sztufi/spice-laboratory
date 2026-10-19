@@ -1,7 +1,7 @@
 import html from '../storefront/index.html?raw';
 import { env } from 'cloudflare:workers';
 import { renderSitePage } from '../server/pages.mjs';
-import {loadStore,runtimeEnv,isStoreAdmin} from '../server/store.mjs';
+import {loadStore,runtimeEnv,isStoreAdmin,adminPrincipal} from '../server/store.mjs';
 import {adminPage} from '../server/admin-page.mjs';
 import {getChatGPTUser} from './chatgpt-auth';
 import {seoEndpoint,seoSetting,seoRedirect} from '../server/seo.mjs';
@@ -19,10 +19,11 @@ export async function GET(request: Request) {
   const object=await env.BUCKET.get('store-media/'+filename);if(!object)return new Response('Nem található.',{status:404});
   return new Response(object.body,{headers:{'Content-Type':object.httpMetadata?.contentType||'application/octet-stream','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
  }
- const user=await getChatGPTUser(),isAdmin=isStoreAdmin(user,env);
+ const googleUser=await googleCustomer(request,env.DB,env);
+ const user=adminPrincipal(await getChatGPTUser(),googleUser,env),isAdmin=isStoreAdmin(user,env);
  if(url.pathname.replace(/\/+$/,'')==='/admin'){
-  if(!user)return Response.redirect(url.origin+'/signin-with-chatgpt?return_to=%2Fadmin',302);
-  if(!isAdmin)return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nincs jogosultság</title><h1>Nincs adminisztrátori jogosultságod.</h1><p>Jelentkezz be a tulajdonosi fiókkal.</p><a target="_top" href="/signout-with-chatgpt?return_to=%2Fadmin">Fiókváltás</a></html>',{status:403,headers});
+  if(!user)return Response.redirect(url.origin+'/fiok?next=%2Fadmin',302);
+  if(!isAdmin)return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Nincs jogosultság</title><h1>Nincs adminisztrátori jogosultságod.</h1><p>Jelentkezz be az adminjogosultságú Google-fiókkal vagy a tulajdonosi tárhelyfiókkal.</p><a href="/fiok?next=%2Fadmin">Fiók megnyitása / fiókváltás</a></html>',{status:403,headers});
   return new Response(adminPage(),{headers});
  }
  try{
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   const settings=shipping?{...env,SHIPPING_METHODS_JSON:JSON.stringify(shipping.methods)}:env;
   const redirect=seoRedirect(url.pathname,store.catalogue.categories);if(redirect){url.pathname=redirect;return Response.redirect(url.href,308);}
   const special=seoEndpoint(url.pathname,store,settings,url.origin);if(special)return special;
-  const authenticated=Boolean(user||await magicCustomer(request,env.DB,env)||await googleCustomer(request,env.DB,env));
+  const authenticated=Boolean(user||await magicCustomer(request,env.DB,env));
   const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,seo:seoSetting(store),isAdmin,authenticated});
   return new Response(page.html,{status:page.status,headers});
  }catch{return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Átmenetileg nem elérhető</title><h1>Az oldal átmenetileg nem elérhető.</h1><p>Próbáld újra később.</p></html>',{status:503,headers});}

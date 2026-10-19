@@ -1,8 +1,8 @@
 # Google customer sign-in
 
-Configured for `https://spice-lab-unalmas-kaja.sztufi.chatgpt.site` from the supplied Web OAuth client configuration. The uploaded Client Secret is not used, committed, or sent to the browser. This implementation uses Google Identity Services popup ID-token login; no OAuth code exchange or redirect URI is needed for this popup flow.
+Configured for `https://spicelaboratory.eu` and `https://spice-lab-unalmas-kaja.sztufi.chatgpt.site` from the supplied Web OAuth client configuration. The uploaded Client Secret is not used, committed, or sent to the browser. This implementation uses Google Identity Services popup ID-token login; no OAuth code exchange or redirect URI is needed for this popup flow.
 
-Customer sign-in is separate from the Sites owner sign-in. Google sessions authorize customer profiles, favorites, addresses, customer orders/invoices and account-mode checkout. The owner/admin routes keep using Sites identity and the existing owner allowlist. Google customer identity cannot grant admin access, including when the email matches an administrator.
+Customer sign-in is separate from the Sites owner sign-in. Google sessions authorize customer profiles, favorites, addresses, customer orders/invoices and account-mode checkout. Admin routes retain Sites identity and its existing owner allowlist. A Google account can additionally receive admin access only through the separate server-side `GOOGLE_ADMIN_EMAILS` allowlist, following an explicit owner instruction. Matching `ADMIN_EMAILS` alone does not grant a Google account admin access. Magic-link identity never grants admin access. Both the admin HTML and every admin API use the same trusted-session identity selector; a Google grant is checked on every request, so removing it immediately revokes authorization.
 
 ## Where to use it
 
@@ -18,6 +18,7 @@ Google's stable `sub` identifies the customer, using a `google:` ID namespace. A
 
 - `GOOGLE_AUTH_ENABLED=true`
 - `GOOGLE_CLIENT_ID`: the public Web client identifier
+- `GOOGLE_ADMIN_EMAILS`: optional comma-separated Google email admin grants, stored as a runtime secret; empty/missing means no Google admins
 - `GOOGLE_ALLOWED_ORIGINS_JSON`: exact HTTPS origins permitted to use this customer login
 
 No Google Client Secret is required. A future domain must be added both to Google Cloud's Authorized JavaScript origins and the hosting origin allowlist. These settings are separate from SEO/indexing and do not activate payments.
@@ -28,7 +29,7 @@ The downloaded JSON confirms the client type and allowed origin. It does not pro
 
 Use Google Auth Platform to verify branding, audience, support email, homepage and privacy-policy URLs. For a consumer webshop, configure the appropriate external audience and production status. If a Google test-user restriction appears during sign-in, the owner must adjust that setting or add the intended tester. Use only the basic identity scopes; no Gmail, contacts or Drive permission is requested by this implementation.
 
-The current privacy page is an informational draft, not finalized legal text. Before business launch, update it with the actual Google login purposes, identifiers, retention, controller information and applicable user rights.
+The privacy page describes Google login purposes and identifiers. Merchant-specific legal verification remains required before business launch. Before business launch, update it with the actual Google login purposes, identifiers, retention, controller information and applicable user rights.
 
 ## Verification
 

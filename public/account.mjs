@@ -111,7 +111,7 @@ function syncAccountView(){
  if(!signedIn&&!root.dataset.magicPending){mountGoogleLogin(root,afterGoogleLogin);mountMagicForms(root);}
 }
 async function afterMagicLogin(){const root=$('#account-page-login');if(root)delete root.dataset.magicPending;await loadAccount();await refreshCommerceIdentity();renderAccount();window.dispatchEvent(new CustomEvent('spice:account-login'));}
-async function afterGoogleLogin(){await logoutMagic();await afterMagicLogin();}
+async function afterGoogleLogin(){await logoutMagic();await afterMagicLogin();if(location.pathname==='/fiok'&&new URLSearchParams(location.search).get('next')==='/admin')location.assign('/admin');}
 export function openAccount(tab='profile'){
  activeTab=['profile','addresses','favorites','orders','invoices','settings'].includes(tab)?tab:'profile';hideNotice();renderAccount();
  window.dispatchEvent(new window.CustomEvent('spice:open-dialog',{detail:'account-dialog'}));

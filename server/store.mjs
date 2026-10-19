@@ -7,9 +7,17 @@ export class StoreError extends Error{constructor(status,message){super(message)
 export const fail=(status,message)=>{throw new StoreError(status,message);};
 export const slug=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
 export function isStoreAdmin(user,env={}){
- if(['google','magic'].includes(user?.provider))return false;
- if(!user?.userId||!user?.email||typeof env.ADMIN_EMAILS!=='string')return false;
- return env.ADMIN_EMAILS.split(',').map(item=>item.trim().toLowerCase()).filter(Boolean).includes(user.email.trim().toLowerCase());
+ if(!user?.userId||!user?.email||user.provider==='magic')return false;
+ const allowlist=user.provider==='google'?env.GOOGLE_ADMIN_EMAILS:env.ADMIN_EMAILS;
+ if(user.provider==='google'&&!user.userId.startsWith('google:'))return false;
+ return typeof allowlist==='string'&&allowlist.split(',').map(item=>item.trim().toLowerCase()).filter(Boolean).includes(user.email.trim().toLowerCase());
+}
+// Only identities resolved from trusted server sessions reach this selector.
+// Customer Google accounts need a separate, explicit administrative grant.
+export function adminPrincipal(sitesUser,googleUser,env={}){
+ if(isStoreAdmin(googleUser,env))return googleUser;
+ if(isStoreAdmin(sitesUser,env))return sitesUser;
+ return googleUser||sitesUser||null;
 }
 export const defaultCategories=seedCatalogue.categories.map(category=>({...initialCategories.find(item=>item.id===category.id),...category,status:'published',parentId:'',revision:'seed'}));
 const initial={product:seedCatalogue.products.map(product=>({...product,sku:'',status:'published',manageStock:false,stockQuantity:0,revision:'seed'})),category:defaultCategories,ingredient:seedCatalogue.ingredients.map(item=>({...item,status:'published',revision:'seed'})),recipe:recipeSeeds,coupon:[],setting:[],media:[]};

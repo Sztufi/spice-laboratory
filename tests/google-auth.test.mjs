@@ -6,6 +6,7 @@ import {generateKeyPair,exportJWK,SignJWT,createLocalJWKSet} from 'jose';
 import {handleGoogleAuth,googleCustomer} from '../server/google-auth.mjs';
 import {handleAccountRequest} from '../server/account.mjs';
 import {handleAdminRequest} from '../server/admin.mjs';
+import {isStoreAdmin,adminPrincipal} from '../server/store.mjs';
 const origin='https://spice.test',clientId='123-test.apps.googleusercontent.com';
 const {privateKey,publicKey}=await generateKeyPair('RS256'),jwk=await exportJWK(publicKey);jwk.kid='test-key';
 const keySet=createLocalJWKSet({keys:[jwk]});
@@ -22,7 +23,7 @@ async function login(ctx,extra={}){
  const challenge=await call(ctx,'challenge'),data=await challenge.json();assert.equal(challenge.status,200);
  const response=await call(ctx,'login','POST',{credential:await sign(data.nonce,extra)},cookies(challenge));return {response,challenge,nonce:data.nonce};
 }
-test('Google login verifies signed identity, sets an opaque HttpOnly cookie, authorizes customer data and never grants owner admin',async()=>{
+test('Google login verifies signed identity, sets an opaque HttpOnly cookie and does not inherit Sites owner grants',async()=>{
  const ctx=context();const {response}=await login(ctx,{email:'owner@example.com'});assert.equal(response.status,200);
  assert.ok(response.headers.get('Set-Cookie').includes('HttpOnly'));assert.ok(response.headers.get('Set-Cookie').includes('Secure'));assert.ok(response.headers.get('Set-Cookie').includes('SameSite=Lax'));
  const cookie=cookies(response),request=req('/api/account', 'GET',undefined,cookie),user=await googleCustomer(request,ctx.db,ctx.env);
@@ -31,7 +32,7 @@ test('Google login verifies signed identity, sets an opaque HttpOnly cookie, aut
  const account=await handleAccountRequest(request,{...ctx,user});assert.equal(account.status,200);assert.equal((await account.json()).authenticationProvider,'google');
  const admin=await handleAdminRequest(req('/api/admin'),{...ctx,user:null});assert.equal(admin.status,401);
  assert.equal((await handleAdminRequest(req('/api/admin'),{...ctx,user})).status,403);
- const accountRoute=readFileSync(new URL('../app/api/admin/[[...path]]/route.ts',import.meta.url),'utf8');assert.ok(accountRoute.includes('getChatGPTUser()'));assert.ok(!accountRoute.includes('googleCustomer'));
+ const accountRoute=readFileSync(new URL('../app/api/admin/[[...path]]/route.ts',import.meta.url),'utf8');assert.ok(accountRoute.includes('getChatGPTUser()'));assert.ok(accountRoute.includes('googleCustomer'));assert.ok(accountRoute.includes('adminPrincipal'));
 });
 test('login CSRF, mismatched nonce/audience, unverified email, missing cookie and replay cannot establish a session',async()=>{
  const ctx=context();assert.equal((await call(ctx,'challenge','POST',{},'','https://evil.test')).status,403);
@@ -62,4 +63,22 @@ test('Google config is origin-bound and disabled without configuration, and anon
  assert.equal((await call({...ctx,env:{}},'challenge')).status,503);
  for(let i=0;i<20;i++)assert.equal((await call(ctx,'challenge')).status,200);
  assert.equal((await call(ctx,'challenge')).status,429);
+});
+test('only a separately granted verified Google session gains admin, and revocation is immediate',async()=>{
+ const ctx=context();ctx.env.GOOGLE_ADMIN_EMAILS=' LabOwner@gmail.com ';
+ const {response}=await login(ctx,{email:'labowner@gmail.com'});assert.equal(response.status,200);
+ const cookie=cookies(response),request=req('/api/admin','GET',undefined,cookie),user=await googleCustomer(request,ctx.db,ctx.env);
+ assert.equal(isStoreAdmin(user,ctx.env),true);assert.equal(adminPrincipal(null,user,ctx.env),user);
+ const overview=await handleAdminRequest(request,{...ctx,user});assert.equal(overview.status,200);assert.equal((await overview.json()).user.provider,'google');
+ const create=await handleAdminRequest(req('/api/admin/categories','POST',{id:'granted-category',label:'Teszt kategória',status:'published'},cookie),{...ctx,user});assert.equal(create.status,201);
+ assert.equal(ctx.sqlite.prepare("SELECT actor_id FROM store_admin_audit WHERE entity_id='granted-category'").get().actor_id,user.userId);
+ const cross=await handleAdminRequest(req('/api/admin/categories','POST',{id:'blocked',label:'Tiltott',status:'published'},cookie,'https://evil.test'),{...ctx,user});assert.equal(cross.status,403);
+ assert.equal((await handleAdminRequest(request,{...ctx,env:{...ctx.env,GOOGLE_ADMIN_EMAILS:''},user})).status,403);
+ assert.equal(isStoreAdmin({...user,provider:'magic'},ctx.env),false);
+ assert.equal(isStoreAdmin({...user,provider:undefined,userId:'sites-other'},ctx.env),false);
+ assert.equal(isStoreAdmin({...user,userId:'invalid-namespace'},ctx.env),false);
+ assert.equal(isStoreAdmin({...user,email:'other@gmail.com'},ctx.env),false);
+ const expired=await googleCustomer(req('/api/admin','GET',undefined,'__Host-spice_google_session='+'f'.repeat(64)),ctx.db,ctx.env);assert.equal(expired,null);
+ const owner={userId:'sites-owner',email:'owner@example.com'};assert.equal(adminPrincipal(owner,{...user,email:'other@gmail.com'},ctx.env),owner);
+ await call(ctx,'logout','POST',{},cookie);assert.equal(await googleCustomer(request,ctx.db,ctx.env),null);
 });

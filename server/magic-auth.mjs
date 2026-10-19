@@ -40,7 +40,7 @@ async function sendEmail(env,email,link,fetcher){
  if(env.MAGIC_EMAIL_PROVIDER==='omnisend'){
   // Transactional server event: no optIns, consent, tags or contact properties.
   // Never retry automatically: real-time events are not deduplicated by Omnisend.
-  const response=await fetcher('https://api.omnisend.com/api/events',{method:'POST',redirect:'error',headers:{Authorization:'Omnisend-API-Key '+env.OMNISEND_API_KEY,'Omnisend-Version':'2026-03-15','Content-Type':'application/json'},body:JSON.stringify({eventName:'spice magic login requested',origin:'api',eventID:crypto.randomUUID(),contact:{email},properties:{loginUrl:link,expiresAt:new Date(Date.now()+600000).toISOString()}}),signal:AbortSignal.timeout(15000)});
+  const response=await fetcher('https://api.omnisend.com/api/events',{method:'POST',redirect:'manual',headers:{Authorization:'Omnisend-API-Key '+env.OMNISEND_API_KEY,'Omnisend-Version':'2026-03-15','Content-Type':'application/json'},body:JSON.stringify({eventName:'spice magic login requested',origin:'api',eventID:crypto.randomUUID(),contact:{email},properties:{loginUrl:link,expiresAt:new Date(Date.now()+600000).toISOString()}}),signal:AbortSignal.timeout(15000)});
   if(response.status!==202)fail(503,'A belépési levelet most nem sikerült elküldeni. Próbáld újra később.');
   await response.body?.cancel();
   return;

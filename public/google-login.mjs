@@ -20,7 +20,7 @@ async function initialize(){
  window.google.accounts.id.initialize({client_id:challenge.clientId,nonce:challenge.nonce,auto_select:false,ux_mode:'popup',callback:async response=>{
   status('Belépés ellenőrzése…');
   try{await api('login',{credential:response.credential});await successCallback?.();}
-  catch(error){initialization=null;status(error.message+' Kattints az újrapróbálásra.');}
+  catch(error){initialization=null;status(error.message+' Kattints az újrapróbálásra.');const retry=statusRoot?.querySelector('[data-google-retry]');if(retry)retry.hidden=false;}
  }});
  return Date.now();
 }
@@ -30,7 +30,7 @@ export async function mountGoogleLogin(root,onSuccess,reset=false){
  if(button.dataset.googleMounted==='true'&&!reset)return;
  button.dataset.googleMounted='true';
  if(reset)initialization=null;
- const retry=root.querySelector('[data-google-retry]');if(retry)retry.disabled=true;
+ const retry=root.querySelector('[data-google-retry]');if(retry){retry.disabled=true;retry.hidden=true;}
  successCallback=onSuccess;status('Google-belépés betöltése…');
  try{
   if(!initialization)initialization=initialize().catch(error=>{initialization=null;throw error;});
@@ -38,8 +38,8 @@ export async function mountGoogleLogin(root,onSuccess,reset=false){
   if(Date.now()-created>8*60000){initialization=null;return mountGoogleLogin(root,onSuccess,true);}
   if(!button.isConnected)return;
   button.replaceChildren();
-  window.google.accounts.id.renderButton(button,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',locale:'hu',width:Math.min(360,Math.max(200,root.clientWidth||300))});status('');
- }catch(error){button.dataset.googleMounted='false';if(button.isConnected)status(error.message);}
+  window.google.accounts.id.renderButton(button,{type:'standard',theme:'filled_black',size:'large',text:'signin_with',shape:'rectangular',locale:'hu',width:Math.min(400,Math.max(200,(button.clientWidth||root.clientWidth||316)-16))});status('');
+ }catch(error){button.dataset.googleMounted='false';if(button.isConnected){status(error.message);if(retry)retry.hidden=false;}}
  finally{if(retry?.isConnected)retry.disabled=false;}
 }
 export async function logoutGoogle(){

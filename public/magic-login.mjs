@@ -12,7 +12,7 @@ export async function mountMagicForms(root){
   try{
    if(!configPromise)configPromise=api('config').catch(error=>{configPromise=null;throw error;});
    const config=await configPromise;if(!form.isConnected)continue;
-   button.disabled=!config.enabled;status.textContent=config.enabled?'':'Az e-mailes belépés hamarosan elérhető. A levélküldés aktiválása folyamatban van.';
+   button.disabled=!config.enabled;form.dataset.magicAvailable=String(config.enabled);status.textContent=config.enabled?'':'Az e-mailes belépés még nem aktív.';
    form.addEventListener('submit',async event=>{
     event.preventDefault();if(button.disabled)return;button.disabled=true;status.textContent='Küldjük a belépési linkedet…';
     try{const result=await api('request',{email:form.querySelector('[data-magic-email]').value,link:form.hasAttribute('data-link-account')});status.textContent=result.message;setTimeout(()=>{if(button.isConnected)button.disabled=false;},60000);}

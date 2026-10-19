@@ -1,7 +1,7 @@
 .nav-icon{position:relative;display:grid;place-items:center;flex:none;width:44px;height:44px;padding:10px;border:0;border-radius:50%;background:transparent;cursor:pointer}
 .nav-icon svg{width:22px;height:22px}
 [data-account-content][hidden],#account-page-login[hidden],#account-tabs[hidden]{display:none!important}
-#account-page-login{max-width:520px;margin:28px 0 40px}
+#account-page-login{max-width:520px;margin:16px 0 32px}
 .magic-login-form{display:grid;gap:12px;margin:22px 0;padding:20px 0;border-bottom:1px solid #17130f33}
 .magic-login-form label{display:grid;gap:8px;font-size:14px;font-weight:600}
 .magic-login-form input{width:100%;min-height:48px;box-sizing:border-box;border:1px solid #b9b09d;border-radius:4px;padding:12px;background:#fff;color:#17130f;font:16px 'DM Sans',sans-serif}
@@ -101,3 +101,6 @@
 .account-login .magic-login-form small{font-size:11px}
 .account-login details{margin-top:18px;font-size:11px}
 #account-page-login .account-login{margin-top:0}
+.page-intro:has(+ #account-page-login:not([hidden])){margin-block:20px 16px;max-width:440px}
+.page-intro:has(+ #account-page-login:not([hidden])) .page-title{margin:0 0 12px}
+.page-intro:has(+ #account-page-login:not([hidden])) .page-lead{font-size:14px;line-height:1.5;margin:0}

@@ -1,4 +1,4 @@
-import {loginPanel} from './account-login.mjs';
+import {loginPanel,loginDescription} from './account-login.mjs';
 import {mountMagicForms,redeemMagicLink,logoutMagic} from './magic-login.mjs';
 import {magicForm} from './magic-markup.mjs';
 import {brandIcon} from './brand-icons.mjs';
@@ -104,10 +104,11 @@ function syncAccountView(){
  const root=$('#account-page-login');if(!root)return;
  root.hidden=signedIn;
  if(signedIn)root.replaceChildren();
- else if(!root.querySelector('[data-google-button]')&&!root.dataset.magicPending)root.innerHTML=styleIcons(loginPanel());
+ else if(!root.querySelector('[data-google-button]')&&!root.dataset.magicPending)root.innerHTML=styleIcons(loginPanel({showIntro:false}));
  for(const node of document.querySelectorAll('[data-account-content]'))node.hidden=!signedIn;
  const heading=$('.page-title');if(heading)heading.innerHTML=signedIn?'KEDVENCEK.<br>RENDELÉSEK. TE.':'BELÉPÉS';
- const lead=$('.page-lead');if(lead)lead.textContent=signedIn?'A mentett fűszereid, a rendeléseid és az adataid. Nem kell mindent újra előkeresned.':'Jelentkezz be a fiókod eléréséhez.';
+ const lead=$('.page-lead');if(lead)lead.textContent=signedIn?'A mentett fűszereid, a rendeléseid és az adataid. Nem kell mindent újra előkeresned.':loginDescription;
+ const kicker=$('.page-intro .section-kicker');if(kicker)kicker.hidden=!signedIn;
  if(!signedIn&&!root.dataset.magicPending){mountGoogleLogin(root,afterGoogleLogin);mountMagicForms(root);}
 }
 async function afterMagicLogin(){const root=$('#account-page-login');if(root)delete root.dataset.magicPending;await loadAccount();await refreshCommerceIdentity();renderAccount();window.dispatchEvent(new CustomEvent('spice:account-login'));}

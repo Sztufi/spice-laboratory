@@ -86,6 +86,7 @@ function renderAccount(){
  $('#account-tabs').hidden=!showTabs;
  if(!showTabs)$('#account-tabs').replaceChildren();
  $('#account-panel').setAttribute('role',showTabs?'tabpanel':'region');
+ $('#account-panel').setAttribute('tabindex','-1');
  $('#account-panel').setAttribute('aria-labelledby',showTabs?`account-tab-${activeTab}`:'account-title');
  $('#account-identity').textContent=state?.authenticated?(state.user.fullName||state.user.email):status==='loading'?'Fiók betöltése…':'SPICE LABORATORY';
  if(activeTab==='favorites')$('#account-panel').innerHTML=styleIcons(favoritePanel());

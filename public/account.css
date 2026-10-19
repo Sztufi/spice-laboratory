@@ -2,6 +2,11 @@
 .nav-icon svg{width:22px;height:22px}
 [data-account-content][hidden],#account-page-login[hidden],#account-tabs[hidden]{display:none!important}
 #account-page-login{max-width:520px;margin:28px 0 40px}
+.magic-login-form{display:grid;gap:12px;margin:22px 0;padding:20px 0;border-bottom:1px solid #17130f33}
+.magic-login-form label{display:grid;gap:8px;font-size:14px;font-weight:600}
+.magic-login-form input{width:100%;min-height:48px;box-sizing:border-box;border:1px solid #b9b09d;border-radius:4px;padding:12px;background:#fff;color:#17130f;font:16px 'DM Sans',sans-serif}
+.magic-login-form [role=status]{margin:0;font-size:13px;line-height:1.5}
+.magic-login-form small{font-size:12px;color:#655b50;line-height:1.5}
 .nav-icon:hover{background:#17130f0c}
 .nav-badge{position:absolute;right:1px;top:1px;min-width:17px;height:17px;padding:1px 3px;border-radius:50%;background:var(--pink);font-size:9px;font-weight:700;line-height:15px}
 .product-card{padding:0 0 14px;border:0;border-bottom:1px solid #17130f29;border-radius:0;background:transparent}

@@ -12,6 +12,19 @@ export const googleChallenges = sqliteTable('google_login_challenges', {
 export const googleThrottle = sqliteTable('google_login_throttle', {
   id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
 },table=>[index('google_throttle_expiry').on(table.expiresAt)]);
+export const emailIdentities=sqliteTable('email_login_identities',{
+ email:text('email').primaryKey(),userId:text('user_id').notNull().references(()=>customers.id)
+});
+export const emailLinks=sqliteTable('email_login_links',{
+ tokenHash:text('token_hash').primaryKey(),email:text('email').notNull(),userId:text('user_id').notNull(),
+ browserHash:text('browser_hash').notNull(),expiresAt:integer('expires_at').notNull(),ready:integer('ready').notNull().default(0)
+},table=>[index('email_links_expiry').on(table.expiresAt)]);
+export const emailSessions=sqliteTable('email_customer_sessions',{
+ tokenHash:text('token_hash').primaryKey(),userId:text('user_id').notNull().references(()=>customers.id),expiresAt:integer('expires_at').notNull(),createdAt:integer('created_at').notNull()
+},table=>[index('email_sessions_expiry').on(table.expiresAt)]);
+export const emailThrottle=sqliteTable('email_login_throttle',{
+ id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
+},table=>[index('email_throttle_expiry').on(table.expiresAt)]);
 export const addresses = sqliteTable('customer_addresses', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), kind: text('kind').notNull(),
   recipient: text('recipient').notNull().default(''), company: text('company').notNull().default(''), taxId: text('tax_id').notNull().default(''),

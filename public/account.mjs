@@ -1,4 +1,6 @@
 import {loginPanel} from './account-login.mjs';
+import {mountMagicForms,redeemMagicLink,logoutMagic} from './magic-login.mjs';
+import {magicForm} from './magic-markup.mjs';
 import {brandIcon} from './brand-icons.mjs';
 import {styleIcons} from './brand-icons.mjs';
 import { formatMoney } from './money.mjs';
@@ -72,7 +74,7 @@ function favoritePanel(){
 const fulfillmentLabels={processing:'Feldolgozás alatt',packing:'Csomagolás alatt',shipped:'Feladva',completed:'Teljesítve','on-hold':'Várakozik',cancelled:'Törölve'};
 function ordersPanel(){return state.orders.length?`<p class="account-description">A demóban végzett próbavásárlásokat külön jelöljük. Nem jelentenek valódi rendelést vagy fizetést.</p>${state.orders.map(order=>`<details class="order-record"><summary><span><strong>${h(order.number)}</strong><small>${date(order.createdAt)}</small></span><span><strong>${money(order.totalMinor,order.currency)}</strong><small class="status-pill">${order.kind==='demo'?'Próbavásárlás':order.kind==='stripe-test'?'Stripe tesztfizetés':order.status==='paid'?'Fizetve':order.status==='pending-payment'?'Fizetésre vár':h(order.status)}</small></span></summary><ul>${order.items.map(item=>`<li><span>${item.quantity} × ${h(item.name)}</span><strong>${money(item.subtotalMinor,order.currency)}</strong></li>`).join('')}${order.discount?`<li><span>Kupon · ${h(order.discount.code)}</span><strong>−${money(order.discount.discountMinor,order.currency)}</strong></li>`:''}${order.shipping?`<li><span>Szállítás · ${h(order.shipping.label)}</span><strong>${money(order.shipping.feeMinor,order.currency)}</strong></li>`:''}</ul>${order.fulfillmentStatus?`<p class="order-tracking">${h(fulfillmentLabels[order.fulfillmentStatus]||order.fulfillmentStatus)}${order.trackingUrl?`<br><a href="${h(order.trackingUrl)}" target="_blank" rel="noopener noreferrer">Csomagkövetés ↗</a>`:''}</p>`:''}</details>`).join('')}`:'<div class="account-empty"><h3>AZ ELSŐ KÖR MÉG ELŐTTED VAN.</h3><p>A fiókhoz mentett rendelések és a megjelölt próbavásárlások itt jelennek meg.</p></div>';}
 function invoicesPanel(){return state.invoices.length?state.invoices.map(invoice=>`<article class="invoice-record"><div><h3>${h(invoice.number)}</h3><p>${date(invoice.issuedAt)} · ${money(invoice.totalMinor,invoice.currency)}</p></div><a class="secondary-button" href="${h(invoice.downloadUrl)}">PDF ↓</a></article>`).join(''):'<div class="account-empty"><h3>MÉG NINCS ELÉRHETŐ SZÁMLA.</h3><p>Ha van kiállított számlád, itt tudod letölteni. A próbavásárlásról nem készül számla.</p></div>';}
-function settingsPanel(){const requested=state.requests.some(item=>item.kind==='deletion'&&item.status==='pending');return `<div class="account-settings"><h3>BEJELENTKEZÉS</h3><p>${state.authenticationProvider==='google'?'Google-fiókkal vagy bejelentkezve.':'A tárhelyfiókkal vagy bejelentkezve.'}</p>${state.authenticationProvider==='google'?'<button class="secondary-button" type="button" data-google-logout>Kijelentkezés</button>':`<a class="secondary-button" href="${h(state.signOutUrl)}" target="_top">Kijelentkezés</a>`}${state.authenticationProvider!=='google'?'<button type="button" class="text-button" data-use-google>Belépés Google-fiókkal</button>':''}<h3>SAJÁT ADATOK EXPORTÁLÁSA</h3><p>Letöltheted a profilodat, címeidet és a fiókodhoz tartozó archívumadatokat JSON formátumban.</p><a class="secondary-button" href="/api/account/export">Adatok letöltése ↓</a><h3>FIÓKTÖRLÉSI KÉRÉS</h3>${requested?'<p class="account-saved">A törlési kérésed rögzítve van, feldolgozásra vár.</p>':'<p>A kérés rögzítése nem törli azonnal a fiókot vagy a megőrzendő bizonylatokat.</p><form id="delete-request-form"><label class="deletion-consent"><input type="checkbox" required>Kérem a fiókom törlésének feldolgozását.</label><button class="secondary-button" type="submit">Törlési kérés rögzítése</button></form>'}</div>`;}
+function settingsPanel(){const requested=state.requests.some(item=>item.kind==='deletion'&&item.status==='pending');return `<div class="account-settings"><h3>BEJELENTKEZÉS</h3><p>${state.authenticationProvider==='magic'?'E-mailes linkkel vagy bejelentkezve.':state.authenticationProvider==='google'?'Google-fiókkal vagy bejelentkezve.':'A tárhelyfiókkal vagy bejelentkezve.'}</p>${['google','magic'].includes(state.authenticationProvider)?'<button class="secondary-button" type="button" data-google-logout>Kijelentkezés</button>':`<a class="secondary-button" href="${h(state.signOutUrl)}" target="_top">Kijelentkezés</a>`}${state.authenticationProvider!=='google'?'<button type="button" class="text-button" data-use-google>Belépés Google-fiókkal</button>':''}<h3>SAJÁT ADATOK EXPORTÁLÁSA</h3><p>Letöltheted a profilodat, címeidet és a fiókodhoz tartozó archívumadatokat JSON formátumban.</p><a class="secondary-button" href="/api/account/export">Adatok letöltése ↓</a><h3>FIÓKTÖRLÉSI KÉRÉS</h3>${requested?'<p class="account-saved">A törlési kérésed rögzítve van, feldolgozásra vár.</p>':'<p>A kérés rögzítése nem törli azonnal a fiókot vagy a megőrzendő bizonylatokat.</p><form id="delete-request-form"><label class="deletion-consent"><input type="checkbox" required>Kérem a fiókom törlésének feldolgozását.</label><button class="secondary-button" type="submit">Törlési kérés rögzítése</button></form>'}</div>`;}
 function renderAccount(){
  syncAccountView();
  const signedIn=Boolean(state?.authenticated);
@@ -89,6 +91,8 @@ function renderAccount(){
  else if(status==='unavailable')$('#account-panel').innerHTML=styleIcons('<div class="account-empty"><h3>A FIÓK MOST NEM ELÉRHETŐ.</h3><p>A mentett adataidat nem módosítottuk. Próbáld újra később.</p><button type="button" class="secondary-button" id="retry-account">Újrapróbálás</button></div>');
  else if(!state?.authenticated)$('#account-panel').innerHTML=styleIcons(loginPanel());
  else $('#account-panel').innerHTML=styleIcons(({profile:profilePanel,addresses:addressesPanel,orders:ordersPanel,invoices:invoicesPanel,settings:settingsPanel}[activeTab]||profilePanel)());
+ if(signedIn&&activeTab==='settings'&&state.authenticationProvider==='google')$('#account-panel').insertAdjacentHTML('beforeend',magicForm(state.user.email,true));
+ mountMagicForms($('#account-panel'));
  if(!state?.authenticated&&$('#account-dialog').open)mountGoogleLogin($('#account-panel'),afterGoogleLogin);
 }
 function syncAccountView(){
@@ -100,13 +104,14 @@ function syncAccountView(){
  const root=$('#account-page-login');if(!root)return;
  root.hidden=signedIn;
  if(signedIn)root.replaceChildren();
- else if(!root.querySelector('[data-google-button]'))root.innerHTML=styleIcons(loginPanel());
+ else if(!root.querySelector('[data-google-button]')&&!root.dataset.magicPending)root.innerHTML=styleIcons(loginPanel());
  for(const node of document.querySelectorAll('[data-account-content]'))node.hidden=!signedIn;
  const heading=$('.page-title');if(heading)heading.innerHTML=signedIn?'KEDVENCEK.<br>RENDELÉSEK. TE.':'BELÉPÉS';
  const lead=$('.page-lead');if(lead)lead.textContent=signedIn?'A mentett fűszereid, a rendeléseid és az adataid. Nem kell mindent újra előkeresned.':'Jelentkezz be a fiókod eléréséhez.';
- if(!signedIn)mountGoogleLogin(root,afterGoogleLogin);
+ if(!signedIn&&!root.dataset.magicPending){mountGoogleLogin(root,afterGoogleLogin);mountMagicForms(root);}
 }
-async function afterGoogleLogin(){await loadAccount();await refreshCommerceIdentity();renderAccount();window.dispatchEvent(new CustomEvent('spice:account-login'));}
+async function afterMagicLogin(){const root=$('#account-page-login');if(root)delete root.dataset.magicPending;await loadAccount();await refreshCommerceIdentity();renderAccount();window.dispatchEvent(new CustomEvent('spice:account-login'));}
+async function afterGoogleLogin(){await logoutMagic();await afterMagicLogin();}
 export function openAccount(tab='profile'){
  activeTab=['profile','addresses','favorites','orders','invoices','settings'].includes(tab)?tab:'profile';hideNotice();renderAccount();
  window.dispatchEvent(new window.CustomEvent('spice:open-dialog',{detail:'account-dialog'}));
@@ -128,7 +133,7 @@ export async function initAccount(){
  $('#open-favorites').addEventListener('click',()=>openAccount('favorites'));
  document.addEventListener('click',async event=>{
   if(event.target.closest('[data-google-retry]')){mountGoogleLogin(event.target.closest('[data-login-root], #account-panel')||$('#account-panel'),afterGoogleLogin,true);return;}
-  if(event.target.closest('[data-google-logout]')){try{await logoutGoogle();await refreshCommerceIdentity();state=null;status='guest';favorites=new Set();emit();renderAccount();}catch(error){notice(error.message,true);}return;}
+  if(event.target.closest('[data-google-logout]')){try{await logoutMagic();await logoutGoogle();await refreshCommerceIdentity();state=null;status='guest';favorites=new Set();emit();renderAccount();}catch(error){notice(error.message,true);}return;}
   if(event.target.closest('[data-use-google]')){state=null;status='guest';activeTab='profile';renderAccount();return;}
   const favorite=event.target.closest('[data-favorite]');if(favorite){await toggleFavorite(favorite.dataset.favorite);return;}
   const tab=event.target.closest('[data-account-tab]');if(tab){activeTab=tab.dataset.accountTab;hideNotice();renderAccount();return;}
@@ -161,5 +166,6 @@ export async function initAccount(){
   try{const raw=JSON.parse(event.newValue||'[]');favorites=new Set(Array.isArray(raw)?raw.filter(id=>products.has(id)):[]);emit();}catch{}
  });
  emit();await loadAccount();syncAccountView();
+ await redeemMagicLink(afterMagicLogin);
  if(location.hash==='#fiok')openAccount();
 }

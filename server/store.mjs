@@ -7,7 +7,7 @@ export class StoreError extends Error{constructor(status,message){super(message)
 export const fail=(status,message)=>{throw new StoreError(status,message);};
 export const slug=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
 export function isStoreAdmin(user,env={}){
- if(user?.provider==='google')return false;
+ if(['google','magic'].includes(user?.provider))return false;
  if(!user?.userId||!user?.email||typeof env.ADMIN_EMAILS!=='string')return false;
  return env.ADMIN_EMAILS.split(',').map(item=>item.trim().toLowerCase()).filter(Boolean).includes(user.email.trim().toLowerCase());
 }

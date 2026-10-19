@@ -104,3 +104,6 @@
 .page-intro:has(+ #account-page-login:not([hidden])){margin-block:20px 16px;max-width:440px}
 .page-intro:has(+ #account-page-login:not([hidden])) .page-title{margin:0 0 12px}
 .page-intro:has(+ #account-page-login:not([hidden])) .page-lead{font-size:14px;line-height:1.5;margin:0}
+.favorites-login-cta{margin-top:28px;padding-top:24px;border-top:1px solid #17130f26}
+.favorites-login-cta h3{font-family:'Barlow Condensed',Impact,sans-serif;font-size:clamp(30px,7.5vw,40px);font-weight:900;line-height:1.05;letter-spacing:-.4px;margin:0 0 18px}
+.favorites-login-cta .primary-button{width:100%;min-height:50px;background:#ffd336;color:#17130f;border:2px solid #17130f;box-sizing:border-box}

@@ -12,6 +12,7 @@ import {cartTotals} from '../public/shop-core.mjs';
 import {assertAvailable} from './store.mjs';
 import {shippingQuote} from './shipping.mjs';
 import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock} from './smartbill.mjs';
+import {omnisendRead,omnisendWrite} from './admin-omnisend.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -144,6 +145,11 @@ export async function handleAdminRequest(request,ctx){
     const row=await q(db,'SELECT * FROM customer_withdrawals WHERE id=?',parts[1]).first();if(!row)fail(404,'Nincs ilyen nyilatkozat.');
     const sent=row.email_status==='sent'||await sendWithdrawalReceipt(db,row,env,ctx.fetcher);return json({sent},sent?200:202);
    }
+  }
+  if(parts[0]==='omnisend'){
+   if(request.method==='GET')return json(await omnisendRead(request,ctx,parts.slice(1)));
+   if(['POST','PATCH'].includes(request.method))return json(await omnisendWrite(ctx,parts.slice(1),await body(request),request.method));
+   return json({error:'Nincs ilyen Omnisend-művelet.'},404);
   }
   if(parts[0]==='smartbill'){
    if(request.method==='GET'&&parts.length===1)return json(await smartbillStatus(db,env));

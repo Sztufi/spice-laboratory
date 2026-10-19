@@ -14,8 +14,24 @@ const request=(path,method='GET',body,customOrigin=origin)=>new Request(origin+p
 const admin=(db,path='',method='GET',body,user=owner,extra={})=>handleAdminRequest(request('/api/admin'+path,method,body),{db,user,env,...extra});
 const commerce=(db,path,method='GET',body,extra={})=>handleCommerceRequest(request('/api/commerce/'+path,method,body),{db,user:buyer,env,...extra});
 async function state(db){const response=await admin(db);assert.equal(response.status,200);return response.json();}
-const product=(extra={})=>({id:'new-spice',name:'Teszt fűszer',priceMinor:300000,weightGrams:150,categories:['bbq'],ingredientIds:['garlic'],status:'published',manageStock:true,stockQuantity:5,...extra});
+const product=(extra={})=>({id:'new-spice',sku:'TEST-SKU-001',name:'Teszt fűszer',priceMinor:300000,weightGrams:150,categories:['bbq'],ingredientIds:['garlic'],status:'published',manageStock:true,stockQuantity:5,...extra});
 async function create(db,path,body){const response=await admin(db,path,'POST',body);assert.equal(response.status,201,await response.clone().text());return response.json();}
+test('SKU is required for drafts and edits, remains exact, and cannot be reused after archiving',async()=>{
+ const {db}=database();
+ for(const sku of [undefined,'','   ','A\nB','A\tB']){
+  const response=await admin(db,'/products','POST',product({sku,status:'draft'}));
+  assert.equal(response.status,400);assert.match((await response.json()).error,/SKU/);
+ }
+ await create(db,'/products',product({sku:'  S001-Ab  '}));
+ let original=(await state(db)).catalogue.products.find(p=>p.id==='new-spice');
+ assert.equal(original.sku,'S001-Ab');
+ assert.equal((await admin(db,'/products/new-spice','PUT',{...original,sku:''})).status,400);
+ assert.equal((await admin(db,'/products','POST',product({id:'second-spice',sku:'S001-Ab'}))).status,409);
+ const results=await Promise.all(['race-a','race-b'].map(id=>admin(db,'/products','POST',product({id,sku:'RACE-001'}))));
+ assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
+ assert.equal((await admin(db,'/products/new-spice','DELETE',original)).status,200);
+ assert.equal((await admin(db,'/products','POST',product({id:'second-spice',sku:'S001-Ab'}))).status,409);
+});
 test('admin grants only explicit verified owner identity and rejects account, body, and origin escalation',async()=>{
  const {db}=database();assert.equal((await admin(db,'','GET',undefined,null)).status,401);assert.equal((await admin(db,'','GET',undefined,buyer)).status,403);assert.equal(isStoreAdmin(owner,{}),false);
  assert.equal((await admin(db,'/products','POST',{...product(),email:owner.email,role:'admin'},buyer)).status,403);
@@ -48,7 +64,7 @@ test('server checkout uses edited prices and approved coupons, preserving the fi
  const response=await commerce(db,'checkout','POST',{checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'new-spice',quantity:2,priceMinor:1}],couponCode:'TEN',totalMinor:1},{fetcher});assert.equal(response.status,201,await response.clone().text());
  assert.equal(checkoutParams.get('line_items[0][price_data][unit_amount]'),'300000');assert.equal(couponParams.get('amount_off'),'60000');assert.equal(checkoutParams.get('discounts[0][coupon]'),'test_coupon');
  session.status='complete';session.payment_status='paid';assert.equal((await commerce(db,'checkout-status?session_id='+session.id,'GET',undefined,{fetcher})).status,200);
- const row=sqlite.prepare('SELECT * FROM customer_orders').get();assert.equal(row.total_minor,639000);assert.equal(JSON.parse(row.discount_json).discountMinor,60000);assert.equal(JSON.parse(row.items_json)[0].priceMinor,300000);
+ const row=sqlite.prepare('SELECT * FROM customer_orders').get();assert.equal(row.total_minor,639000);assert.equal(JSON.parse(row.discount_json).discountMinor,60000);assert.equal(JSON.parse(row.items_json)[0].priceMinor,300000);assert.equal(JSON.parse(row.items_json)[0].sku,'TEST-SKU-001');
  assert.equal((await commerce(db,'coupon-quote','POST',{code:'TEN',items:[{id:'new-spice',quantity:1}]})).status,400);
 });
 test('stock reservations reject overselling and live settlement reduces stock exactly once',async()=>{
@@ -82,7 +98,7 @@ test('order fulfillment stays separate from payment and customer APIs never expo
  assert.equal((await admin(db,'/orders/'+id,'PUT',{fulfillmentStatus:'shipped',trackingUrl:'javascript:alert(1)'})).status,400);
  assert.equal((await admin(db,'/orders/'+id,'PUT',{fulfillmentStatus:'shipped',trackingUrl:'https://track.example.com/123',note:'private packing note',revision:'new',totalMinor:1})).status,200);
  const response=await handleAccountRequest(request('/api/account'),{db,user:buyer,env}),account=await response.json();assert.equal(account.orders[0].status,'demo-completed');assert.equal(account.orders[0].fulfillmentStatus,'shipped');assert.equal(account.orders[0].totalMinor,275000);assert.ok(!JSON.stringify(account).includes('private packing note'));
- const original=(await state(db)).catalogue.products.find(p=>p.id==='fries-salt');assert.equal((await admin(db,'/products/fries-salt','DELETE',original)).status,200);assert.ok(!(await loadStore(db)).catalogue.products.some(p=>p.id==='fries-salt'));
+ const original=(await state(db)).catalogue.products.find(p=>p.id==='fries-salt');assert.equal((await admin(db,'/products/fries-salt','DELETE',{...original,sku:'TEST-FRIES'})).status,200);assert.ok(!(await loadStore(db)).catalogue.products.some(p=>p.id==='fries-salt'));
  assert.equal((await (await handleAccountRequest(request('/api/account'),{db,user:buyer,env})).json()).orders[0].items[0].name,'Fries Salt');
 });
 test('media uploads require real image signatures and private invoices remain admin-only',async()=>{

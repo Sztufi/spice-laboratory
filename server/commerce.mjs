@@ -58,7 +58,7 @@ async function createCheckout(request,ctx,config,input){
  const {db,user,env,fetcher,catalogue}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
  if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
  const totals=validateItems(input.items,catalogue);
- const items=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
+ const items=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,sku:product.sku||'',name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
  const discount=input.couponCode?await couponQuote(db,input.couponCode,totals.totalMinor):null;
  const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},totals.totalMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
  const total=totals.totalMinor-(discount?.discountMinor||0)+shipping.feeMinor;

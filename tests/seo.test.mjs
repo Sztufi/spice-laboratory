@@ -93,7 +93,7 @@ test('SEO settings are owner-only, validated, revision-protected and cannot togg
 test('product/category/recipe SEO persists across live catalogue and category slug changes retain permanent redirects',async()=>{
  const {db,admin}=dbContext(),initial=await (await admin()).json();
  const p=initial.catalogue.products[0];
- assert.equal((await admin('/products/'+p.id,'PUT',{...p,seo:{title:'Csirkefűszer – Rooster',description:'Részletes termékmeta',focusKeyword:'csirkefűszer'}})).status,200);
+ assert.equal((await admin('/products/'+p.id,'PUT',{...p,sku:'TEST-SEO-SKU',seo:{title:'Csirkefűszer – Rooster',description:'Részletes termékmeta',focusKeyword:'csirkefűszer'}})).status,200);
  let store=await loadStore(db);const html=render('/termek/'+p.id,{...store}).html;assert.ok(html.includes('<title>Csirkefűszer – Rooster</title>'));
  let category=initial.catalogue.categories[0];const old=category.slug;
  assert.equal((await admin('/categories/'+category.id,'PUT',{...category,slug:'uj-bbq-url',seo:{title:'BBQ fűszerek',noindex:true}})).status,200);

@@ -118,7 +118,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       const previous=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       if(previous)return json({saved:true,...previous});
       const id=crypto.randomUUID(),number=`DEMO-${id.slice(0,8).toUpperCase()}`;
-      const items=total.lines.map(line=>({productId:line.id,name:line.product.name,quantity:line.quantity,priceMinor:line.product.priceMinor,subtotalMinor:line.subtotalMinor}));
+      const items=total.lines.map(line=>({productId:line.id,sku:line.product.sku||'',name:line.product.name,quantity:line.quantity,priceMinor:line.product.priceMinor,subtotalMinor:line.subtotalMinor}));
       await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null,discount?JSON.stringify(discount):null).run();
       const saved=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       return json({saved:true,...saved},201);

@@ -41,7 +41,8 @@ function validate(kind,input,store){
   if(status==='published'&&(!categories.length||!ingredientIds.length||categories.some(key=>!store.catalogue.categories.some(item=>item.id===key&&item.status==='published'))||ingredientIds.some(key=>!store.catalogue.ingredients.some(item=>item.id===key&&item.status==='published'))))fail(400,'Közzétételhez aktív kategória és aktív összetevőlista is szükséges.');
   const original=store.catalogue.products.find(item=>item.id===id)||{};
   const ingredients=ingredientIds.map(key=>({id:key,sourceLabel:input.ingredients?.find(item=>item.id===key)?.sourceLabel||store.catalogue.ingredients.find(item=>item.id===key).label}));
-  data={id,name:text(input.name,120,true),subtitle:text(input.subtitle,180),description:text(input.description,5000),sku:text(input.sku,80),currency:'HUF',priceMinor:int(input.priceMinor,1,100000000),weightGrams:int(input.weightGrams,1,100000),categories,ingredients,image:imageUrl(input.image),color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#f2b4d0',manageStock:input.manageStock===true,stockQuantity:int(input.stockQuantity??0,0,1000000),salePriceMinor:input.salePriceMinor?int(input.salePriceMinor,1,input.priceMinor):null,
+  const sku=text(input.sku,80);if(!sku||/[\r\n\t]/.test(sku))fail(400,'A SKU / SmartBill Cod produs kötelező, egy sorban megadva.');
+  data={id,name:text(input.name,120,true),subtitle:text(input.subtitle,180),description:text(input.description,5000),sku,currency:'HUF',priceMinor:int(input.priceMinor,1,100000000),weightGrams:int(input.weightGrams,1,100000),categories,ingredients,image:imageUrl(input.image),color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#f2b4d0',manageStock:input.manageStock===true,stockQuantity:int(input.stockQuantity??0,0,1000000),salePriceMinor:input.salePriceMinor?int(input.salePriceMinor,1,input.priceMinor):null,
    sourceIngredientText:text(input.sourceIngredientText,5000)||ingredients.map(item=>item.sourceLabel).join(', '),traceStatementOriginal:text(input.traceStatementOriginal,1500),sourceUrl:original.sourceUrl||'',sourceAttributeIngredientText:original.sourceAttributeIngredientText||'',sourceConflict:original.sourceConflict||false};
  }else if(kind==='category'){
   const parentId=text(input.parentId,90);if(parentId&&(parentId===id||!store.catalogue.categories.some(item=>item.id===parentId&&item.status!=='archived')))fail(400,'Hibás szülőkategória.');
@@ -84,9 +85,9 @@ async function save(db,user,kind,data,isNew){
  if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo'].includes(data.id)))fail(404,'Nem található bejegyzés.');
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
- const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?)
- ON CONFLICT(kind,id) DO UPDATE SET payload_json=excluded.payload_json,status=excluded.status,revision=excluded.revision,updated_at=excluded.updated_at WHERE store_records.revision=? RETURNING id`,kind,data.id,JSON.stringify(payload),status,crypto.randomUUID(),time(),time(),revision).first();
- if(!updated)fail(409,'Az adat időközben megváltozott. Frissítsd a listát.');
+ const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE (?<>'product' OR NOT EXISTS(SELECT 1 FROM store_records WHERE kind='product' AND id<>? AND json_extract(payload_json,'$.sku')=?))
+ ON CONFLICT(kind,id) DO UPDATE SET payload_json=excluded.payload_json,status=excluded.status,revision=excluded.revision,updated_at=excluded.updated_at WHERE store_records.revision=? RETURNING id`,kind,data.id,JSON.stringify(payload),status,crypto.randomUUID(),time(),time(),kind,data.id,data.sku||'',revision).first();
+ if(!updated)fail(409,'Az adat időközben megváltozott, vagy a SKU már használatban van. Frissítsd a listát.');
  await audit(db,user,isNew?'create':'update',kind,data.id);
 }
 async function overview(db,user,env){
@@ -167,7 +168,7 @@ export async function handleAdminRequest(request,ctx){
    const customerId=existing?.id||'guest:manual:'+crypto.randomUUID(),id=crypto.randomUUID(),number='MAN-'+id.slice(0,8).toUpperCase(),fullName=text(input.fullName,100);
    await db.batch([
     q(db,'INSERT INTO customers(id,email,full_name,phone,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',customerId,email,fullName,'',time(),time()),
-    q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,customerId,'admin:'+input.requestId,number,'manual','pending-payment',total.totalMinor+(shipping?.feeMinor||0),'HUF',JSON.stringify(total.lines.map(line=>({productId:line.id,name:line.product.name,priceMinor:line.product.priceMinor,quantity:line.quantity,subtotalMinor:line.subtotalMinor}))),time(),shipping?JSON.stringify(shipping):null),
+    q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,customerId,'admin:'+input.requestId,number,'manual','pending-payment',total.totalMinor+(shipping?.feeMinor||0),'HUF',JSON.stringify(total.lines.map(line=>({productId:line.id,sku:line.product.sku||'',name:line.product.name,priceMinor:line.product.priceMinor,quantity:line.quantity,subtotalMinor:line.subtotalMinor}))),time(),shipping?JSON.stringify(shipping):null),
     q(db,'INSERT INTO store_order_operations(order_id,fulfillment_status,tracking_url,note,revision,updated_at) VALUES(?,?,?,?,?,?)',id,'on-hold','',text(input.note,3000),crypto.randomUUID(),time())
    ]);
    await audit(db,user,'create-manual-order','order',id);return json({saved:true,id,number},201);
@@ -193,7 +194,7 @@ export async function handleAdminRequest(request,ctx){
    if(request.method!=='POST'&&(parts.length!==2||input.id!==parts[1]))fail(400,'Az azonosító nem egyezik.');
    if(request.method==='DELETE')input.status='archived';
    const data=validate(kind,input,store);
-   if(kind==='product'&&data.sku&&store.catalogue.products.some(p=>p.id!==data.id&&p.status!=='archived'&&p.sku===data.sku))fail(409,'Ez a cikkszám már használatban van.');
+   if(kind==='product'&&store.catalogue.products.some(p=>p.id!==data.id&&p.sku===data.sku))fail(409,'Ez a cikkszám már használatban van.');
    if(kind==='product'&&data.manageStock){const reserved=await q(db,'SELECT COALESCE(SUM(quantity),0) AS amount FROM store_stock_reservations WHERE product_id=? AND expires_at>?',data.id,Math.floor(Date.now()/1000)).first();if(data.stockQuantity<reserved.amount)fail(409,'A készlet nem lehet kisebb az aktív fizetésekhez lefoglalt mennyiségnél.');}
    await save(db,user,kind,data,request.method==='POST');return json({saved:true,id:data.id},request.method==='POST'?201:200);
   }

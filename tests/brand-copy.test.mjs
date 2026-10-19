@@ -17,7 +17,8 @@ test('the independent Hungarian storefront has no Romanian shop links, cross-sho
   assert.ok(html.includes('mailto:hello@spicelaboratory.ro'),path+' retains real service email');
  }
  const script=readFileSync(new URL('../public/shop.mjs',import.meta.url),'utf8');
- assert.ok(!script.includes('Eredeti termékoldal'));assert.ok(script.includes('ingredientDetails(product)'));
+ assert.ok(!script.includes('Eredeti termékoldal'));
+ assert.ok(readFileSync(new URL('../server/pages.mjs',import.meta.url),'utf8').includes('ingredientDetails(product)'));
 });
 test('ingredient copy retains identity, order, trace warnings and known conflicts without external links',()=>{
  assert.equal(ingredientTextHu('Sare de mare, PUDRĂ DE MUȘTAR, țelină.'),'tengeri só, mustárpor, zeller');

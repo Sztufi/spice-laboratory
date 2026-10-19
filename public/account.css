@@ -5,8 +5,7 @@
 .product-card{padding:0 0 14px;border:0;border-bottom:1px solid #17130f29;border-radius:0;background:transparent}
 .product-media{position:relative;min-width:0;align-self:start}
 .product-visual{aspect-ratio:4/5;border-radius:7px}
-.product-peek{width:29px;height:29px;right:8px;bottom:8px;border:0;border-radius:50%;box-shadow:none;background:#fff9e9d9}
-.product-peek svg{width:18px;height:18px}
+.account-favorite h3 a{color:inherit;text-decoration:none}
 .favorite-button{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:40px;height:40px;padding:9px;border:0;border-radius:50%;background:#fff9e9ed;color:var(--ink);cursor:pointer;transition:background .2s}
 .favorite-button svg{width:21px;height:21px}
 .favorite-button:hover{background:#f9c1d8}

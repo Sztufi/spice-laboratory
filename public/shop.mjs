@@ -1,5 +1,4 @@
 import { productCard } from './product-markup.mjs';
-import {ingredientDetails} from './ingredient-copy.mjs';
 import { categoryPath } from './page-data.mjs';
 import { renderCheckout, checkoutSelection, shippingOverview } from './checkout.mjs';
 import { commerceApi } from './commerce.mjs';
@@ -140,32 +139,12 @@ function resetFilters() {
   renderIngredientOptions();
 }
 
-function showProduct(id) {
-  const product = productsById.get(id);
-  if (!product) return;
-  $('#product-detail').innerHTML = `
-    <img class="product-detail-image" src="${escape(product.image)}" width="500" height="500" alt="${escape(product.name)} fűszerkeverék">
-    <p class="detail-kicker">${escape(product.subtitle)}</p><h2 id="detail-title">${escape(product.name)}</h2>
-    <p class="detail-description">${escape(product.description)}</p>
-    <a class="text-button full-product-link" href="/termek/${escape(product.id)}">Minden a keverékről →</a>
-    <div class="detail-meta"><span>Kiszerelés: ${product.weightGrams} g</span><strong>${money(product.priceMinor)}</strong></div>
-    ${shippingOverview(getCommerceConfig(),product.priceMinor)}
-    <h3 class="ingredient-title">MI VAN BENNE? · ${product.ingredients.length} ÖSSZETEVŐ</h3>
-    <div class="ingredient-chips">${product.ingredients.map(item => `<button class="ingredient-tag" type="button" data-filter-ingredient="${escape(item.id)}" title="${escape(label(item.id))}" aria-label="Szűrés erre az összetevőre: ${escape(label(item.id))}">${escape(label(item.id))}</button>`).join('')}</div>
-    <p class="ingredient-hint">Koppints egy összetevőre, és nézd meg, melyik másik keverékben találod meg.</p>
-    ${ingredientDetails(product)}`;
-  $('#product-detail-footer').innerHTML = `<button class="primary-button yellow" type="button" data-action="add" data-id="${escape(id)}"${product.inStock===false?' disabled':''}>${product.inStock===false?'NEM ELÉRHETŐ':'KOSÁRBA'} · ${money(product.priceMinor)} ${icon('plus')}</button>`;
-  $('#product-detail').scrollTop = 0;
-  openDialog('product-dialog');
-}
-
 function addToCart(id, requestedQuantity=1) {
   const product = productsById.get(id);
   if (!product) return;
   if(product.inStock===false){toast('Ez a termék átmenetileg nem elérhető.',false);return;}
   const previous = cart.find(item => item.id === id)?.quantity || 0;
   if (previous >= MAX_QUANTITY) {
-    if ($('#product-dialog').open) $('#product-dialog').close();
     if ($('#account-dialog').open) $('#account-dialog').close();
     toast(`A demóban legfeljebb ${MAX_QUANTITY} db választható termékenként.`);
     return;
@@ -173,8 +152,7 @@ function addToCart(id, requestedQuantity=1) {
   const added=Math.min(purchaseQuantity(requestedQuantity),MAX_QUANTITY-previous);
   cart = setQuantity(cart, id, previous + added, catalogue.products);
   persistCart();
-  if ($('#product-dialog').open) $('#product-dialog').close();
-    if ($('#account-dialog').open) $('#account-dialog').close();
+  if ($('#account-dialog').open) $('#account-dialog').close();
   toast(`${added} db ${product.name} a kosaradban.${added<purchaseQuantity(requestedQuantity)?' Elérted a termékenkénti 99 db-os korlátot.':''}`);
 }
 
@@ -251,22 +229,10 @@ document.addEventListener('click', event => {
     $('#open-filters').focus({ preventScroll: true });
     return;
   }
-  const filterIngredient = event.target.closest('[data-filter-ingredient]');
-  if (filterIngredient) {
-    if(!isProductArchive){location.assign('/termekek?ingredient='+encodeURIComponent(filterIngredient.dataset.filterIngredient));return;}
-    filters = { ...filters, category: pageCategory, query: '', ingredients: [filterIngredient.dataset.filterIngredient], match: 'all' };
-    $('#product-search').value = '';
-    $('#product-dialog').close();
-    renderCatalogue();
-    $('#termekek').scrollIntoView({ block: 'start' });
-    $('#open-filters').focus({ preventScroll: true });
-    return;
-  }
   const action = event.target.closest('[data-action]');
   if (!action) return;
   const { id } = action.dataset;
   switch (action.dataset.action) {
-    case 'detail': showProduct(id); break;
     case 'add': addToCart(id,action.hasAttribute('data-use-product-quantity')?$('#product-quantity')?.value:1); break;
     case 'checkout': showCheckout(); break;
     case 'back-cart': renderCart(); $('#cart-content').scrollTop = 0; break;

@@ -2,6 +2,7 @@ let config={stripeEnabled:false,newsletterEnabled:false};
 let checkoutAttempt=null;
 const notice=message=>window.dispatchEvent(new CustomEvent('spice:notice',{detail:message}));
 export function getCommerceConfig(){return config;}
+export async function refreshCommerceIdentity(){try{config=await commerceApi('config');}catch{}return config;}
 export async function commerceApi(path,options={}){
  const response=await fetch('/api/commerce/'+path,{credentials:'same-origin',cache:'no-store',...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...options.headers},signal:AbortSignal.timeout(18000)});
  const result=await response.json();if(!response.ok){const error=new Error(result.error||'A művelet most nem sikerült.');error.status=response.status;throw error;}return result;

@@ -3,6 +3,15 @@ export const customers = sqliteTable('customers', {
   id: text('id').primaryKey(), email: text('email').notNull(), fullName: text('full_name').notNull().default(''),
   phone: text('phone').notNull().default(''), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
 });
+export const googleSessions = sqliteTable('google_customer_sessions', {
+  tokenHash:text('token_hash').primaryKey(),userId:text('user_id').notNull().references(()=>customers.id),expiresAt:integer('expires_at').notNull(),createdAt:integer('created_at').notNull()
+},table=>[index('google_sessions_expiry').on(table.expiresAt)]);
+export const googleChallenges = sqliteTable('google_login_challenges', {
+  tokenHash:text('token_hash').primaryKey(),nonce:text('nonce').notNull(),expiresAt:integer('expires_at').notNull()
+},table=>[index('google_challenges_expiry').on(table.expiresAt)]);
+export const googleThrottle = sqliteTable('google_login_throttle', {
+  id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
+},table=>[index('google_throttle_expiry').on(table.expiresAt)]);
 export const addresses = sqliteTable('customer_addresses', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), kind: text('kind').notNull(),
   recipient: text('recipient').notNull().default(''), company: text('company').notNull().default(''), taxId: text('tax_id').notNull().default(''),

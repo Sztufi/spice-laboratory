@@ -53,13 +53,13 @@ async function accountData(db,user,catalogue=seedCatalogue) {
     rows(db,'SELECT kind,status,created_at FROM customer_account_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',user.userId)
   ]);
   return {
-    authenticated:true, authenticationProvider:'sites-preview',
+    authenticated:true, authenticationProvider:user.provider||'sites-preview',
     user:{ fullName:profile?.full_name ?? user.fullName ?? '', email:user.email, phone:profile?.phone ?? '' },
     addresses:Object.fromEntries(addressRows.map(row => [row.kind,addressDto(row)])),
     favorites:favoriteRows.map(row=>row.product_id).filter(id=>productIds.has(id)),
     orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,fulfillmentStatus:row.fulfillment_status||null,trackingUrl:row.tracking_url||null,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,discount:row.discount_json?JSON.parse(row.discount_json):null,createdAt:row.created_at })),
     invoices:invoiceRows.map(row=>({ id:row.id,number:row.number,issuedAt:row.issued_at,totalMinor:row.total_minor,currency:row.currency,orderId:row.order_id,downloadUrl:`/api/account/invoices/${encodeURIComponent(row.id)}/download` })),
-    requests, capabilities:{ googleSignIn:false, liveOrders:false, invoiceIssuing:false },
+    requests, capabilities:{ googleSignIn:user.provider==='google', liveOrders:false, invoiceIssuing:false },
     signInUrl:'/signin-with-chatgpt?return_to=%2F%23fiok', signOutUrl:'/signout-with-chatgpt?return_to=%2F'
   };
 }

@@ -92,7 +92,7 @@ test('Google verifier requires configuration, signed valid tokens, correct audie
  const jwk=await exportJWK(publicKey);jwk.kid='test-key';jwk.alg='RS256';
  const keySet=createLocalJWKSet({keys:[jwk]});
  const clientId='1234567890-test.apps.googleusercontent.com',nonce='server-bound-test-nonce-123456';
- const sign=(audience=clientId,tokenNonce=nonce,expiry='5m')=>new SignJWT({nonce:tokenNonce,email:'alice@example.com',name:'Alice'}).setProtectedHeader({alg:'RS256',kid:'test-key'}).setIssuer('https://accounts.google.com').setSubject('google-stable-subject').setAudience(audience).setIssuedAt().setExpirationTime(expiry).sign(privateKey);
+ const sign=(audience=clientId,tokenNonce=nonce,expiry='5m')=>new SignJWT({nonce:tokenNonce,email:'alice@example.com',email_verified:true,name:'Alice'}).setProtectedHeader({alg:'RS256',kid:'test-key'}).setIssuer('https://accounts.google.com').setSubject('google-stable-subject').setAudience(audience).setIssuedAt().setExpirationTime(expiry).sign(privateKey);
  await assert.rejects(verifyGoogleIdentity('anything',{}));
  const verified=await verifyGoogleIdentity(await sign(),{clientId,nonce,keySet});assert.equal(verified.subject,'google-stable-subject');
  await assert.rejects(verifyGoogleIdentity(await sign('wrong-audience'),{clientId,nonce,keySet}));

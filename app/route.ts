@@ -5,9 +5,11 @@ import {loadStore,runtimeEnv,isStoreAdmin} from '../server/store.mjs';
 import {adminPage} from '../server/admin-page.mjs';
 import {getChatGPTUser} from './chatgpt-auth';
 import {seoEndpoint,seoSetting,seoRedirect} from '../server/seo.mjs';
+import {staticImageResponse} from '../server/image-response.mjs';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
  const url=new URL(request.url);
+ const image=await staticImageResponse(request);if(image)return image;
  if(url.pathname.length>1&&url.pathname.endsWith('/')){url.pathname=url.pathname.replace(/\/+$/,'');return Response.redirect(url.href,308);}
  const headers={'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'};
  if(url.pathname.startsWith('/media/')){

@@ -11,6 +11,7 @@ import {assertSameOrigin} from './account.mjs';
 import {cartTotals} from '../public/shop-core.mjs';
 import {assertAvailable} from './store.mjs';
 import {shippingQuote} from './shipping.mjs';
+import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock} from './smartbill.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -71,6 +72,9 @@ function validate(kind,input,store){
   if(typeof pages!=='object'||Array.isArray(pages)||Object.keys(pages).some(path=>!seoPages.some(p=>p.path===path)))fail(400,'Ismeretlen SEO-oldal.');
   const verification=text(input.verification,200);if(verification&&!/^[A-Za-z0-9_-]+$/.test(verification))fail(400,'Csak a Google ellenőrzőkódját add meg, ne HTML-t.');
   data={id,indexingEnabled:input.indexingEnabled===true,verification,pages:Object.fromEntries(Object.entries(pages).map(([path,value])=>[path,validateSeo(value)]))};
+ }else if(kind==='setting'&&id==='smartbill'){
+  if(status!=='published')fail(400,'A SmartBill-beállítás csak aktív állapotban menthető.');
+  data={id,...validateSmartbillSettings(input)};
  }else if(kind==='setting'&&id==='shipping'){
   const methods=list(input.methods,10);const valid=shippingMethods({SHIPPING_METHODS_JSON:JSON.stringify(methods)});if(valid.length!==methods.length)fail(400,'Ellenőrizd a szállítási díjakat és kézbesítési időket.');data={id,methods:valid};
  }else fail(404,'Ismeretlen adattípus.');
@@ -82,7 +86,7 @@ async function save(db,user,kind,data,isNew){
  const {status,revision,...payload}=data;
  if(isNew&&(recordDefaults(kind).some(item=>item.id===data.id)||await q(db,'SELECT id FROM store_records WHERE kind=? AND id=?',kind,data.id).first()))fail(409,'Ez az azonosító már létezik.');
  const previous=await q(db,'SELECT revision FROM store_records WHERE kind=? AND id=?',kind,data.id).first();
- if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo'].includes(data.id)))fail(404,'Nem található bejegyzés.');
+ if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo','smartbill'].includes(data.id)))fail(404,'Nem található bejegyzés.');
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
  const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE (?<>'product' OR NOT EXISTS(SELECT 1 FROM store_records WHERE kind='product' AND id<>? AND json_extract(payload_json,'$.sku')=?))
@@ -140,6 +144,12 @@ export async function handleAdminRequest(request,ctx){
     const row=await q(db,'SELECT * FROM customer_withdrawals WHERE id=?',parts[1]).first();if(!row)fail(404,'Nincs ilyen nyilatkozat.');
     const sent=row.email_status==='sent'||await sendWithdrawalReceipt(db,row,env,ctx.fetcher);return json({sent},sent?200:202);
    }
+  }
+  if(parts[0]==='smartbill'){
+   if(request.method==='GET'&&parts.length===1)return json(await smartbillStatus(db,env));
+   if(request.method==='POST'&&parts.length===2&&parts[1]==='test'){await body(request);return json(await testSmartbill(db,env,ctx.fetcher));}
+   if(request.method==='POST'&&parts.length===2&&parts[1]==='stock')return json(await smartbillStock(db,env,await body(request),ctx.fetcher));
+   return json({error:'Nem található SmartBill-művelet.'},404);
   }
   if(request.method==='GET'&&!parts.length)return json(await overview(db,user,env));
   if(request.method==='GET'&&(['analytics','archive'].includes(parts[0])||parts[0]==='export'&&['orders','order-lines','archive'].includes(parts[1])))return await analyticsEndpoint(request,db,parts);

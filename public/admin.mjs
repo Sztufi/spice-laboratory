@@ -4,18 +4,19 @@ import {mountWithdrawals} from './admin-withdrawals.mjs';
 import {analyticsPanel,archivePanel,mountReports} from './admin-analytics.mjs';
 import {seoPanel,mountSeoPanel,seoFields,seoInput,mountSeoPreview} from './admin-seo.mjs';
 import {prepareImage} from './image-upload.mjs';
+import {mountSmartbill} from './admin-smartbill.mjs';
 const $=selector=>document.querySelector(selector);
 const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalize=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const slug=value=>normalize(value).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
 const money=(value,currency='HUF')=>new Intl.NumberFormat('hu-HU',{style:'currency',currency,maximumFractionDigits:currency==='HUF'?0:2}).format((value||0)/100);
 const date=value=>value?new Intl.DateTimeFormat('hu-HU',{dateStyle:'medium'}).format(new Date(value)):'—';
-const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',archive:'Rendelési archívum',withdrawals:'Elállási nyilatkozatok',products:'Termékek',categories:'Kategóriák',ingredients:'Összetevők',orders:'Rendelések',customers:'Vásárlók',coupons:'Kuponok',recipes:'Blog / receptek',seo:'SEO / keresőoptimalizálás',media:'Médiatár',newsletter:'Hírlevél',settings:'Beállítások'};
+const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',archive:'Rendelési archívum',withdrawals:'Elállási nyilatkozatok',products:'Termékek',categories:'Kategóriák',ingredients:'Összetevők',orders:'Rendelések',customers:'Vásárlók',coupons:'Kuponok',recipes:'Blog / receptek',seo:'SEO / keresőoptimalizálás',media:'Médiatár',newsletter:'Hírlevél',smartbill:'SmartBill',settings:'Beállítások'};
 const kindNames={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon'};
 const stateLabels={'pending-payment':'Fizetésre vár',published:'Közzétéve',draft:'Piszkozat',archived:'Archiválva',paid:'Fizetve','demo-completed':'Próbavásárlás',processing:'Feldolgozás',packing:'Csomagolás',shipped:'Feladva',completed:'Teljesítve','on-hold':'Várakozik',cancelled:'Törölve',synced:'Omnisend visszaigazolta',failed:'Szinkronhiba',pending:'Függőben'};
 let data=null,tab=new URLSearchParams(location.search).get('tab')||'dashboard',editing=null;
 if(!labels[tab])tab='dashboard';
-const adminIcons={dashboard:'grid',analytics:'grid',archive:'receipt',withdrawals:'receipt',products:'jar',categories:'grid',ingredients:'jar',orders:'box',customers:'profile',coupons:'receipt',recipes:'book',seo:'search',media:'eye',newsletter:'mail',settings:'settings'};
+const adminIcons={dashboard:'grid',analytics:'grid',archive:'receipt',withdrawals:'receipt',products:'jar',categories:'grid',ingredients:'jar',orders:'box',customers:'profile',coupons:'receipt',recipes:'book',seo:'search',media:'eye',newsletter:'mail',smartbill:'receipt',settings:'settings'};
 function pill(status){return `<span class="pill ${['published','paid','completed','synced'].includes(status)?'good':['archived','failed','cancelled'].includes(status)?'bad':'pink'}">${h(stateLabels[status]||status||'—')}</span>`;}
 function notice(message,error=false){const node=$('#admin-notice');node.textContent=message;node.hidden=false;node.classList.toggle('error',error);}
 async function api(path='',method='GET',body){
@@ -52,6 +53,7 @@ function render(){
  if(tab==='analytics'||tab==='archive')mountReports($('#admin-panel'),api,{archive:tab==='archive'});
  if(tab==='withdrawals')mountWithdrawals($('#admin-panel'),api);
  if(tab==='seo')mountSeoPanel($('#admin-panel'),data,api,refresh);
+ if(tab==='smartbill')mountSmartbill($('#admin-panel'),api);
 }
 async function refresh(){data=await api();render();}
 function openEditor(kind,record,duplicate=false){

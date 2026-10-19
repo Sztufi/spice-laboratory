@@ -1,5 +1,6 @@
 declare namespace Cloudflare {
   interface Env {
+    ADMIN_EMAILS?: string;
     STRIPE_ENABLED?: string;
     STRIPE_SECRET_KEY?: string;
     STRIPE_WEBHOOK_SECRET?: string;

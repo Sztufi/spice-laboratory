@@ -14,7 +14,7 @@ export const favorites = sqliteTable('customer_favorites', {
 }, table => [primaryKey({ columns: [table.userId, table.productId] })]);
 export const orders = sqliteTable('customer_orders', {
   id: text('id').primaryKey(), userId: text('user_id').notNull().references(() => customers.id), requestId: text('request_id').notNull(),
-  shippingJson:text('shipping_json'),
+  shippingJson:text('shipping_json'),discountJson:text('discount_json'),
   number: text('number').notNull(), kind: text('kind').notNull().default('demo'), status: text('status').notNull(),
   totalMinor: integer('total_minor').notNull(), currency: text('currency').notNull(), itemsJson: text('items_json').notNull(), createdAt: text('created_at').notNull()
 }, table => [uniqueIndex('order_user_request').on(table.userId, table.requestId)]);
@@ -33,7 +33,7 @@ export const checkouts = sqliteTable('payment_checkouts', {
   fingerprint: text('fingerprint').notNull(), itemsJson: text('items_json').notNull(), totalMinor: integer('total_minor').notNull(),
   currency: text('currency').notNull(), mode: text('mode').notNull(), status: text('status').notNull().default('creating'),
   sessionId: text('session_id'), sessionUrl: text('session_url'), expiresAt: integer('expires_at'),
-  shippingJson:text('shipping_json'),
+  shippingJson:text('shipping_json'),discountJson:text('discount_json'),
   customerJson: text('customer_json'), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
 }, table => [uniqueIndex('checkout_user_request').on(table.userId,table.requestId),uniqueIndex('checkout_session').on(table.sessionId)]);
 export const paymentEvents = sqliteTable('payment_events', {
@@ -54,3 +54,32 @@ export const guestCheckoutAccess = sqliteTable('guest_checkout_access', {
   tokenHash:text('token_hash').primaryKey(),customerId:text('customer_id').notNull().references(()=>customers.id),
   expiresAt:integer('expires_at').notNull(),createdAt:text('created_at').notNull()
 });
+
+export const storeRecords = sqliteTable('store_records', {
+  kind:text('kind').notNull(),id:text('id').notNull(),payloadJson:text('payload_json').notNull(),
+  status:text('status').notNull().default('draft'),revision:text('revision').notNull(),
+  createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
+},table=>[primaryKey({columns:[table.kind,table.id]})]);
+export const storeAudit = sqliteTable('store_admin_audit', {
+  id:text('id').primaryKey(),actorId:text('actor_id').notNull(),action:text('action').notNull(),
+  entity:text('entity').notNull(),entityId:text('entity_id').notNull(),createdAt:text('created_at').notNull()
+});
+export const orderOperations = sqliteTable('store_order_operations', {
+  orderId:text('order_id').primaryKey(),fulfillmentStatus:text('fulfillment_status').notNull().default('processing'),
+  trackingUrl:text('tracking_url').notNull().default(''),note:text('note').notNull().default(''),
+  revision:text('revision').notNull(),updatedAt:text('updated_at').notNull()
+});
+export const newsletterSubscribers = sqliteTable('newsletter_subscribers', {
+  email:text('email').primaryKey(),consentVersion:text('consent_version').notNull(),consentText:text('consent_text').notNull(),
+  status:text('status').notNull().default('pending'),revision:text('revision').notNull(),
+  createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
+});
+export const newsletterThrottle = sqliteTable('newsletter_throttle', {
+  id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
+});
+export const stockMovements = sqliteTable('store_stock_movements', {
+  orderId:text('order_id').notNull(),productId:text('product_id').notNull(),quantity:integer('quantity').notNull(),createdAt:text('created_at').notNull()
+},table=>[primaryKey({columns:[table.orderId,table.productId]})]);
+export const stockReservations = sqliteTable('store_stock_reservations', {
+  checkoutId:text('checkout_id').notNull(),productId:text('product_id').notNull(),quantity:integer('quantity').notNull(),expiresAt:integer('expires_at').notNull()
+},table=>[primaryKey({columns:[table.checkoutId,table.productId]})]);

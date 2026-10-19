@@ -7,37 +7,34 @@ export async function commerceApi(path,options={}){
  const result=await response.json();if(!response.ok){const error=new Error(result.error||'A művelet most nem sikerült.');error.status=response.status;throw error;}return result;
 }
 export async function startStripeCheckout(cart,selection){
- const fingerprint=JSON.stringify({cart,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId});
+ const fingerprint=JSON.stringify({cart,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||''});
  if(checkoutAttempt?.fingerprint!==fingerprint)checkoutAttempt={fingerprint,requestId:crypto.randomUUID()};
  try{
  if(selection.checkoutMode==='guest')await commerceApi('checkout-access',{method:'POST',body:'{}'});
- const result=await commerceApi('checkout',{method:'POST',body:JSON.stringify({items:cart,requestId:checkoutAttempt.requestId,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId})});
+ const result=await commerceApi('checkout',{method:'POST',body:JSON.stringify({items:cart,requestId:checkoutAttempt.requestId,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||''})});
  if(!result.url?.startsWith('https://checkout.stripe.com/'))throw new Error('Hibás fizetési hivatkozás.');
  window.location.assign(result.url);
  }catch(error){if(error.status===409)checkoutAttempt=null;throw error;}
 }
 async function refreshMarketing(){
  const form=document.querySelector('#newsletter-form'),status=document.querySelector('#newsletter-status');if(!form||!status)return;
- const submit=form.querySelector('button'),check=form.querySelector('input');
- if(!config.newsletterEnabled){status.textContent='A hírlevél hamarosan indul. A feliratkozás még nem aktív.';submit.disabled=true;check.disabled=true;return;}
- try{const data=await commerceApi('marketing');
- form.dataset.authenticated='true';document.querySelector('#newsletter-email').textContent=data.email;
- const subscribed=data.status==='subscribed';
- if(subscribed){check.checked=true;submit.textContent=data.syncStatus==='synced'?'LEIRATKOZOM':'SZINKRONIZÁLÁS ÚJRA';status.textContent=data.syncStatus==='synced'?'Feliratkoztál. Bármikor leiratkozhatsz.':'A hozzájárulásod mentve, az Omnisend-szinkron még nem sikerült.';}
- else{check.checked=false;submit.textContent=data.status==='unsubscribed'&&data.syncStatus!=='synced'?'LEIRATKOZÁS ÚJRA':'FELIRATKOZOM';status.textContent=data.syncStatus==='failed'?'A leiratkozást elmentettük, de az Omnisend még nem igazolta vissza. Próbáld újra.':'';}
- form.dataset.status=data.status;form.dataset.subscribed=String(subscribed);form.dataset.synced=String(data.syncStatus==='synced');check.disabled=subscribed;
- submit.disabled=false;
- }catch(error){submit.disabled=true;check.disabled=true;status.textContent=error.status===401?'A feliratkozáshoz jelentkezz be a fiókodba.':'A feliratkozási beállítások most nem érhetők el.';}
+ const submit=form.querySelector('button');
+ submit.disabled=!config.newsletterEnabled;
+ status.textContent=config.newsletterEnabled?'Bejelentkezés nélkül is feliratkozhatsz.':'A hírlevél hamarosan indul. A feliratkozás még nem aktív.';
 }
 export async function initCommerce(onPayment){
- document.querySelector('#newsletter-login')?.addEventListener('click',()=>document.querySelector('#open-account')?.click());
  document.querySelector('#newsletter-form')?.addEventListener('submit',async event=>{
- event.preventDefault();const form=event.target,button=form.querySelector('button'),status=document.querySelector('#newsletter-status');
- const subscribed=form.dataset.subscribed==='true';const shouldSubscribe=form.dataset.status==='unsubscribed'&&form.dataset.synced!=='true'?false:subscribed&&form.dataset.synced!=='true'?true:!subscribed;
- if(shouldSubscribe&&!form.querySelector('input').checked){status.textContent='Jelöld be a hozzájárulást a feliratkozáshoz.';return;}
- button.disabled=true;status.textContent='Mentés…';
- try{const data=await commerceApi('marketing',{method:'PUT',body:JSON.stringify({subscribed:shouldSubscribe,consentVersion:config.consentVersion})});await refreshMarketing();if(!data.synced)status.textContent='A kérésedet elmentettük, de az Omnisend még nem igazolta vissza. Próbáld újra később.';}
- catch(error){status.textContent=error.message;button.disabled=false;}
+  event.preventDefault();const form=event.target,button=form.querySelector('button'),status=document.querySelector('#newsletter-status');
+  const email=document.querySelector('#newsletter-email'),check=document.querySelector('#newsletter-consent');
+  if(!email.checkValidity()){email.reportValidity();return;}
+  if(!check.checked){status.textContent='Jelöld be a hozzájárulást a feliratkozáshoz.';return;}
+  button.disabled=true;status.textContent='Feliratkozás…';
+  try{
+   const data=await commerceApi('newsletter',{method:'POST',body:JSON.stringify({email:email.value,consent:check.checked,consentVersion:config.consentVersion,website:document.querySelector('#newsletter-website')?.value||''})});
+   status.textContent=data.synced?'Köszönjük a feliratkozást! Az e-mailekben bármikor leiratkozhatsz.':'A kérésedet elmentettük, de az Omnisend még nem igazolta vissza. Próbáld újra később.';
+   if(data.synced){email.value='';check.checked=false;}
+  }catch(error){status.textContent=error.message;}
+  finally{button.disabled=!config.newsletterEnabled;}
  });
  try{config=await commerceApi('config');}catch{}
  if(config.stripeEnabled){

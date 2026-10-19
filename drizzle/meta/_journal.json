@@ -22,6 +22,20 @@
       "when": 1792351931310,
       "tag": "0002_fearless_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792375528336,
+      "tag": "0003_blue_crusher_hogan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792375822228,
+      "tag": "0004_wooden_frog_thor",
+      "breakpoints": true
     }
   ]
 }

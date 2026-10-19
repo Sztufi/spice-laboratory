@@ -1,5 +1,5 @@
 // Product names, photographs and ingredient lists checked on spicelaboratory.ro.
-export const catalogue = {
+export const seedCatalogue = {
   "schemaVersion": 1,
   "pricingPolicy": "All products priced at 2750 HUF by merchant instruction on 2026-10-18; not a currency conversion of source prices.",
   "checkedAt": "2026-10-18",
@@ -809,3 +809,12 @@ export const catalogue = {
     }
   ]
 };
+
+function pageCatalogue(){
+  if(typeof document==='undefined')return seedCatalogue;
+  const node=document.getElementById('store-catalogue');
+  if(!node)return seedCatalogue;
+  try{const data=JSON.parse(node.textContent);if(data.currency==='HUF'&&Array.isArray(data.products)&&Array.isArray(data.categories)&&Array.isArray(data.ingredients))return data;}catch{}
+  return seedCatalogue;
+}
+export const catalogue=pageCatalogue();

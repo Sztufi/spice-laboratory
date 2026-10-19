@@ -1,9 +1,27 @@
 import html from '../storefront/index.html?raw';
 import { env } from 'cloudflare:workers';
 import { renderSitePage } from '../server/pages.mjs';
+import {loadStore,runtimeEnv,isStoreAdmin} from '../server/store.mjs';
+import {adminPage} from '../server/admin-page.mjs';
+import {getChatGPTUser} from './chatgpt-auth';
 export const dynamic = 'force-dynamic';
-export function GET(request: Request) {
+export async function GET(request: Request) {
  const url=new URL(request.url);
- const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env});
- return new Response(page.html,{status:page.status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+ const headers={'Content-Type':'text/html; charset=utf-8','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'};
+ if(url.pathname.startsWith('/media/')){
+  const filename=url.pathname.slice(7);if(!/^[a-f0-9-]{36}\.(png|jpg|webp)$/.test(filename)||!env.BUCKET)return new Response('Nem található.',{status:404});
+  const object=await env.BUCKET.get('store-media/'+filename);if(!object)return new Response('Nem található.',{status:404});
+  return new Response(object.body,{headers:{'Content-Type':object.httpMetadata?.contentType||'application/octet-stream','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
+ }
+ const user=await getChatGPTUser(),isAdmin=isStoreAdmin(user,env);
+ if(url.pathname.replace(/\/+$/,'')==='/admin'){
+  if(!user)return Response.redirect(url.origin+'/signin-with-chatgpt?return_to=%2Fadmin',302);
+  if(!isAdmin)return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nincs jogosultság</title><h1>Nincs adminisztrátori jogosultságod.</h1><p>Jelentkezz be a tulajdonosi fiókkal.</p><a target="_top" href="/signout-with-chatgpt?return_to=%2Fadmin">Fiókváltás</a></html>',{status:403,headers});
+  return new Response(adminPage(),{headers});
+ }
+ try{
+  const [store,settings]=await Promise.all([loadStore(env.DB),runtimeEnv(env.DB,env)]);
+  const page=renderSitePage(html,{pathname:url.pathname,search:url.search,origin:url.origin,env:settings,catalogue:store.catalogue,recipes:store.recipes,isAdmin});
+  return new Response(page.html,{status:page.status,headers});
+ }catch{return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Átmenetileg nem elérhető</title><h1>Az oldal átmenetileg nem elérhető.</h1><p>Próbáld újra később.</p></html>',{status:503,headers});}
 }

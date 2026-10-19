@@ -3,6 +3,7 @@
 Mobilra tervezett fűszer-webshop előnézet, kedvencekkel és szerveroldali vásárlói fiókalappal.
 
 - Oldalak és navigáció: [docs/WEBSITE-PAGES.md](docs/WEBSITE-PAGES.md)
+- Tulajdonosi admin (`/admin`), termék- és kategóriakezelés, receptblog (`/blog`) és vendégfeliratkozás: [docs/ADMIN-RECIPES.md](docs/ADMIN-RECIPES.md)
 - Boltfelület: `storefront/index.html`, `public/`
 - Fiók API: `app/api/account/[[...path]]/route.ts`, `server/account.mjs`
 - Stripe és Omnisend API: `app/api/commerce/[[...path]]/route.ts`, `server/commerce.mjs`

@@ -1,6 +1,7 @@
 import { shippingMethods, shippingQuote, SHIPPING_COUNTRIES } from './shipping.mjs';
 import { guestCheckoutAccess, issueGuestCheckoutAccess } from './guest-checkout.mjs';
-import { catalogue } from '../public/catalogue.mjs';
+import {loadStore,runtimeEnv,assertAvailable,reserveStock,stockSettlementStatements,couponQuote,StoreError} from './store.mjs';
+import {subscribeNewsletter} from './newsletter.mjs';
 import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
@@ -45,31 +46,38 @@ export async function verifyStripeEvent(raw,signature,secret,timestamp=Math.floo
  if(!valid)fail(400,'Érvénytelen webhook aláírás.');
  try{return JSON.parse(raw);}catch{fail(400,'Hibás webhook.');}
 }
-function validateItems(items){
- if(!Array.isArray(items)||!items.length||items.length>10)fail(400,'Hibás kosár.');
+function validateItems(items,catalogue){
+ if(!Array.isArray(items)||!items.length||items.length>100)fail(400,'Hibás kosár.');
  const ids=new Set();for(const item of items){if(!catalogue.products.some(p=>p.id===item?.id)||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>99||ids.has(item.id))fail(400,'Hibás termék vagy mennyiség.');ids.add(item.id);}
- return cartTotals(items,catalogue.products);
+ assertAvailable(items,catalogue);return cartTotals(items,catalogue.products);
 }
 async function createCheckout(request,ctx,config,input){
- const {db,user,env,fetcher}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
+ const {db,user,env,fetcher,catalogue}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
  if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
- const totals=validateItems(input.items);
+ const totals=validateItems(input.items,catalogue);
  const items=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
- const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},totals.totalMinor);if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
- const total=totals.totalMinor+shipping.feeMinor;
- const fingerprint=JSON.stringify({items,shipping,mode:config.mode});
+ const discount=input.couponCode?await couponQuote(db,input.couponCode,totals.totalMinor):null;
+ const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},totals.totalMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
+ const total=totals.totalMinor-(discount?.discountMinor||0)+shipping.feeMinor;
+ const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode});
  await customer(db,user);
  let row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();
  if(row&&row.fingerprint!==fingerprint)fail(409,'Ehhez a fizetéshez más kosár tartozik. Indíts új fizetést.');
- if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now(),JSON.stringify(shipping)).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
+ if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now(),JSON.stringify(shipping),discount?JSON.stringify(discount):null).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
  if(row.fingerprint!==fingerprint)fail(409,'A kosár időközben megváltozott.');
  if(row.status==='paid')fail(409,'Ezt a rendelést már kifizetted.');
  if(row.session_id){if(row.expires_at*1000<=Date.now())fail(409,'A fizetési hivatkozás lejárt. Indíts új fizetést.');return json({url:row.session_url,checkoutId:row.id,mode:row.mode});}
  // Never reuse a possibly forgotten Stripe idempotency key after its retention window.
  if(Date.now()-Date.parse(row.created_at)>23*60*60*1000)fail(409,'Ez a fizetési kísérlet lejárt. Indíts új fizetést.');
+ if(config.mode==='live')await reserveStock(db,row.id,items);
  const origin=new URL(request.url).origin;
  const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':shipping.country,success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
  if(user.email)params.set('customer_email',user.email);
+ if(discount){
+  const coupon=await stripe(env,'coupons',{params:new URLSearchParams({duration:'once',currency:catalogue.currency.toLowerCase(),amount_off:String(discount.discountMinor),name:discount.code}),key:`spice-coupon-${row.id}`,fetcher});
+  if(typeof coupon.id!=='string'||coupon.id.length>200)fail(502,'Nem sikerült a kedvezményt érvényesíteni.');
+  params.set('discounts[0][coupon]',coupon.id);
+ }
  for(const [i,item] of items.entries()){params.set(`line_items[${i}][price_data][currency]`,catalogue.currency.toLowerCase());params.set(`line_items[${i}][price_data][unit_amount]`,String(item.priceMinor));params.set(`line_items[${i}][price_data][product_data][name]`,item.name);params.set(`line_items[${i}][quantity]`,String(item.quantity));}
  params.set('shipping_options[0][shipping_rate_data][type]','fixed_amount');params.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]',String(shipping.feeMinor));params.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]',catalogue.currency.toLowerCase());params.set('shipping_options[0][shipping_rate_data][display_name]',shipping.label);
  params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]',String(shipping.deliveryMinDays));params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]',String(shipping.deliveryMaxDays));
@@ -80,15 +88,17 @@ async function createCheckout(request,ctx,config,input){
 }
 async function applySession(db,row,session,eventId,eventType){
  if(session.id!==row.session_id||session.metadata?.checkout_id!==row.id||session.client_reference_id!==row.id||session.livemode!==(row.mode==='live')||session.amount_total!==row.total_minor||session.currency?.toUpperCase()!==row.currency)fail(400,'A fizetési adatok nem egyeznek.');
- const paid=session.payment_status==='paid'&&session.status==='complete';
+ const paid=(session.payment_status==='paid'||session.payment_status==='no_payment_required'&&row.total_minor===0)&&session.status==='complete';
  const status=paid?'paid':session.status==='expired'?'expired':'open';
  const statements=[q(db,"UPDATE payment_checkouts SET status=CASE WHEN status='paid' THEN status ELSE ? END, customer_json=COALESCE(?,customer_json),updated_at=? WHERE id=?",status,paid?JSON.stringify({billing:session.customer_details,shipping:session.collected_information?.shipping_details??session.shipping_details??null}):null,now(),row.id)];
  if(paid){
  const number=`SL-${row.id.slice(0,8).toUpperCase()}`;
- statements.push(q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',row.id,row.user_id,`stripe:${row.id}`,number,row.mode==='live'?'stripe':'stripe-test','paid',row.total_minor,row.currency,row.items_json,now(),row.shipping_json));
+ statements.push(q(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',row.id,row.user_id,`stripe:${row.id}`,number,row.mode==='live'?'stripe':'stripe-test','paid',row.total_minor,row.currency,row.items_json,now(),row.shipping_json,row.discount_json||null));
+ statements.push(...stockSettlementStatements(db,row));
  // Queue only; delivery is a separate, explicitly enabled operation. Test payments never become marketing events.
  if(row.mode==='live')statements.push(q(db,"INSERT INTO marketing_events(id,user_id,order_id,payload_json,status,created_at,updated_at) SELECT ?,?,?,?,?,?,? FROM marketing_preferences WHERE user_id=? AND status='subscribed' AND sync_status='synced' ON CONFLICT(order_id) DO NOTHING",crypto.randomUUID(),row.user_id,row.id,JSON.stringify({orderID:row.id,orderNumber:number,currency:row.currency,value:row.total_minor/100,items:JSON.parse(row.items_json)}),'pending',now(),now(),row.user_id));
  }
+ if(status==='expired')statements.push(q(db,'DELETE FROM store_stock_reservations WHERE checkout_id=?',row.id));
  if(eventId)statements.push(q(db,'INSERT INTO payment_events(id,checkout_id,type,created_at) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',eventId,row.id,eventType,now()));
  await db.batch(statements);return {status:row.status==='paid'?'paid':status,orderId:paid||row.status==='paid'?row.id:null,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null};
 }
@@ -128,7 +138,8 @@ export async function deliverMarketingEvent(ctx,orderId){
 }
 export async function handleCommerceRequest(request,ctx){
  try {
- const {db,user,env={}}=ctx,config=commerceConfig(env),url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
+ const {db,user}=ctx,env=await runtimeEnv(db,ctx.env||{}),config=commerceConfig(env),url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
+ ctx={...ctx,env};
  if(request.method==='GET'&&path==='config')return json({...config,accountAvailable:!!user?.userId&&!!user?.email});
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stripe-webhook'&&request.method==='POST'){
@@ -141,6 +152,13 @@ export async function handleCommerceRequest(request,ctx){
  await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({received:true});
  }
  if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
+ if(path==='newsletter'&&request.method==='POST'){
+  const result=await subscribeNewsletter(request,ctx,config,CONSENT_TEXT);return json(result,result.synced?200:202);
+ }
+ if(path==='coupon-quote'&&request.method==='POST'){
+  const input=await body(request),{catalogue}=await loadStore(db),totals=validateItems(input.items,catalogue);
+  return json({discount:await couponQuote(db,input.code,totals.totalMinor)});
+ }
  if(path==='checkout-access'&&request.method==='POST'){
   if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
   await body(request);const cookie=await issueGuestCheckoutAccess(request,db);
@@ -150,7 +168,7 @@ export async function handleCommerceRequest(request,ctx){
   const input=await body(request);if(!['guest','account'].includes(input?.checkoutMode))fail(400,'Válassz vásárlási módot.');
   const principal=input.checkoutMode==='guest'?await guestCheckoutAccess(request,db):user;
   if(!principal?.userId||(input.checkoutMode==='account'&&!principal.email))fail(401,input.checkoutMode==='guest'?'A vendégpénztárhoz engedélyezd a szükséges sütiket, majd próbáld újra.':'A fiókkal vásárláshoz jelentkezz be.');
-  return await createCheckout(request,{...ctx,user:principal},config,input);
+  const {catalogue}=await loadStore(db);return await createCheckout(request,{...ctx,user:principal,catalogue},config,input);
  }
  if(path==='claim-order'&&request.method==='POST'){
   if(!user?.userId||!user?.email)fail(401,'A rendelés fiókhoz kapcsolásához jelentkezz be.');
@@ -173,5 +191,5 @@ export async function handleCommerceRequest(request,ctx){
  if(!user?.userId||!user?.email)fail(401,'Ehhez jelentkezz be a fiókodba.');
  if(path==='marketing'&&['GET','PUT'].includes(request.method))return await preferences(request,ctx,config);
  return json({error:'Nem található művelet.'},404);
- }catch(error){return json({error:error instanceof CommerceError?error.message:error?.status===403?'Eltérő eredetű kérés.':'A művelet most nem sikerült. Próbáld újra később.'},error instanceof CommerceError?error.status:error?.status===403?403:500);}
+ }catch(error){return json({error:error instanceof CommerceError||error instanceof StoreError?error.message:error?.status===403?'Eltérő eredetű kérés.':'A művelet most nem sikerült. Próbáld újra később.'},error instanceof CommerceError||error instanceof StoreError?error.status:error?.status===403?403:500);}
 }

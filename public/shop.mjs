@@ -98,8 +98,8 @@ function renderCatalogue(updateHistory = true) {
   $('#product-count').textContent = `${results.length} / ${available} fűszerkeverék`;
   $('#empty-results').hidden = results.length > 0;
   $('#reset-filters').hidden = !filters.query && (!filters.category||filters.category===pageCategory) && !filters.ingredients.length && !favoritesFilterEnabled();
-  $('#categories').innerHTML = [{ id: '', label: 'Mind a 10' }, ...catalogue.categories].map(category =>
-    pageCategory?`<a class="category-chip" href="${categoryPath(category.id)}"${category.id===pageCategory?' aria-current="page"':''}>${escape(category.label)}</a>`:`<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
+  $('#categories').innerHTML = [{ id: '', label: 'Összes' }, ...catalogue.categories].map(category =>
+    pageCategory?`<a class="category-chip" href="${categoryPath(category.id,catalogue.categories)}"${category.id===pageCategory?' aria-current="page"':''}>${escape(category.label)}</a>`:`<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
   ).join('');
   if (focusedCategory !== undefined) [...document.querySelectorAll('[data-category]')].find(button => button.dataset.category === focusedCategory)?.focus({ preventScroll: true });
   $('#active-filters').innerHTML = filters.ingredients.map(id =>
@@ -156,9 +156,9 @@ function showProduct(id) {
       ${product.sourceConflict ? `<div class="source-discrepancy"><strong>Eltérő adatok az eredeti oldalon.</strong><br>A fenti lista a termékoldal látható „Ingrediente” részéből származik. A webáruház termékattribútuma ettől eltér:<p lang="ro">${escape(product.sourceAttributeIngredientText)}</p></div>` : ''}
       ${product.traceStatementOriginal ? `<p>Nyomokban tartalmazhat – eredeti forrásszöveg:<br><span lang="ro">${escape(product.traceStatementOriginal)}</span></p>` : ''}
       <p>A szűrő az összetevőlistán alapul, a nyomokban előforduló allergéneket nem értékeli. Ételallergia esetén az aktuális termékcímkét ellenőrizd.</p>
-      <a href="${escape(product.sourceUrl)}" target="_blank" rel="noopener noreferrer">Eredeti termékoldal ↗</a>
+      ${product.sourceUrl?`<a href="${escape(product.sourceUrl)}" target="_blank" rel="noopener noreferrer">Eredeti termékoldal ↗</a>`:''}
     </details>`;
-  $('#product-detail-footer').innerHTML = `<button class="primary-button yellow" type="button" data-action="add" data-id="${escape(id)}">KOSÁRBA · ${money(product.priceMinor)} ${icon('plus')}</button>`;
+  $('#product-detail-footer').innerHTML = `<button class="primary-button yellow" type="button" data-action="add" data-id="${escape(id)}"${product.inStock===false?' disabled':''}>${product.inStock===false?'NEM ELÉRHETŐ':'KOSÁRBA'} · ${money(product.priceMinor)} ${icon('plus')}</button>`;
   $('#product-detail').scrollTop = 0;
   openDialog('product-dialog');
 }
@@ -166,6 +166,7 @@ function showProduct(id) {
 function addToCart(id) {
   const product = productsById.get(id);
   if (!product) return;
+  if(product.inStock===false){toast('Ez a termék átmenetileg nem elérhető.',false);return;}
   const previous = cart.find(item => item.id === id)?.quantity || 0;
   if (previous >= MAX_QUANTITY) {
     if ($('#product-dialog').open) $('#product-dialog').close();
@@ -209,20 +210,20 @@ function showCart() {
 function showCheckout() {
  const totals=cartTotals(cart,catalogue.products);if(!totals.count){renderCart();return;}
  cartView='checkout';
- renderCheckout({totals,config:getCommerceConfig(),onPay:selection=>startStripeCheckout(cart,selection),onAccount:()=>document.querySelector('#open-account').click()});
+ renderCheckout({totals,config:getCommerceConfig(),onPay:selection=>startStripeCheckout(cart,selection),onAccount:()=>document.querySelector('#open-account').click(),onCoupon:code=>commerceApi('coupon-quote',{method:'POST',body:JSON.stringify({code,items:cart})})});
  $('#cart-content').scrollTop=0;
 }
 
 async function completeDemoOrder(event) {
   event.preventDefault();
   const { count, totalMinor:subtotalMinor } = cartTotals(cart, catalogue.products);
-  const selection=checkoutSelection(getCommerceConfig(),subtotalMinor);const totalMinor=subtotalMinor+(selection.quote?.feeMinor||0);
+  const selection=checkoutSelection(getCommerceConfig(),subtotalMinor);const totalMinor=subtotalMinor-selection.discountMinor+(selection.quote?.feeMinor||0);
   if (!count) { renderCart(); return; }
   const submit = document.querySelector('[form="checkout-form"]');
   if (submit?.disabled) return;
   if (submit) submit.disabled = true;
   let archived;
-  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId}:undefined):{saved:false}; }
+  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId}:undefined,selection.couponCode):{saved:false}; }
   catch (error) {
     if (submit) submit.disabled = false;
     $('#cart-content .checkout-error')?.remove();

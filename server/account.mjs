@@ -1,7 +1,7 @@
 import { shippingMethods, shippingQuote } from './shipping.mjs';
-import { catalogue } from '../public/catalogue.mjs';
+import { seedCatalogue } from '../public/catalogue.mjs';
+import {loadStore,runtimeEnv,assertAvailable,couponQuote} from './store.mjs';
 import { sanitizeCart, cartTotals } from '../public/shop-core.mjs';
-const productIds = new Set(catalogue.products.map(product => product.id));
 const headers = { 'Cache-Control':'private, no-store', 'Vary':'Cookie', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'same-origin' };
 const json = (body, status = 200) => Response.json(body, { status, headers });
 class RequestError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -42,12 +42,13 @@ async function ensureCustomer(db, user) {
 function addressDto(row) {
   return { recipient:row.recipient, company:row.company, taxId:row.tax_id, country:row.country, line1:row.line1, line2:row.line2, city:row.city, postalCode:row.postal_code };
 }
-async function accountData(db,user) {
+async function accountData(db,user,catalogue=seedCatalogue) {
+  const productIds=new Set(catalogue.products.map(product=>product.id));
   const [profile,addressRows,favoriteRows,orderRows,invoiceRows,requests] = await Promise.all([
     query(db,'SELECT full_name,phone,created_at,updated_at FROM customers WHERE id = ?',user.userId).first(),
     rows(db,'SELECT * FROM customer_addresses WHERE user_id = ?',user.userId),
     rows(db,'SELECT product_id FROM customer_favorites WHERE user_id = ? ORDER BY created_at',user.userId),
-    rows(db,'SELECT id,number,kind,status,total_minor,currency,items_json,shipping_json,created_at FROM customer_orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',user.userId),
+    rows(db,'SELECT o.*,ops.fulfillment_status,ops.tracking_url FROM customer_orders o LEFT JOIN store_order_operations ops ON ops.order_id=o.id WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 100',user.userId),
     rows(db,'SELECT id,number,issued_at,total_minor,currency,order_id FROM customer_invoices WHERE user_id = ? ORDER BY issued_at DESC LIMIT 100',user.userId),
     rows(db,'SELECT kind,status,created_at FROM customer_account_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',user.userId)
   ]);
@@ -56,7 +57,7 @@ async function accountData(db,user) {
     user:{ fullName:profile?.full_name ?? user.fullName ?? '', email:user.email, phone:profile?.phone ?? '' },
     addresses:Object.fromEntries(addressRows.map(row => [row.kind,addressDto(row)])),
     favorites:favoriteRows.map(row=>row.product_id).filter(id=>productIds.has(id)),
-    orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,createdAt:row.created_at })),
+    orders:orderRows.map(row=>({ id:row.id,number:row.number,kind:row.kind,status:row.status,fulfillmentStatus:row.fulfillment_status||null,trackingUrl:row.tracking_url||null,totalMinor:row.total_minor,currency:row.currency,items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,discount:row.discount_json?JSON.parse(row.discount_json):null,createdAt:row.created_at })),
     invoices:invoiceRows.map(row=>({ id:row.id,number:row.number,issuedAt:row.issued_at,totalMinor:row.total_minor,currency:row.currency,orderId:row.order_id,downloadUrl:`/api/account/invoices/${encodeURIComponent(row.id)}/download` })),
     requests, capabilities:{ googleSignIn:false, liveOrders:false, invoiceIssuing:false },
     signInUrl:'/signin-with-chatgpt?return_to=%2F%23fiok', signOutUrl:'/signout-with-chatgpt?return_to=%2F'
@@ -68,8 +69,10 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
     const route = url.pathname.replace(/^\/api\/account\/?/,'').split('/').filter(Boolean).map(part=>decodeURIComponent(part));
     if (!user?.userId || !user?.email) return json({ authenticated:false, signInUrl:'/signin-with-chatgpt?return_to=%2F%23fiok', capabilities:{googleSignIn:false}, error:'A művelethez bejelentkezés szükséges.' },401);
     if (!db) return json({error:'A fiók adatbázisa átmenetileg nem elérhető.'},503);
+    const {catalogue}=await loadStore(db),productIds=new Set(catalogue.products.map(product=>product.id));
+    env=await runtimeEnv(db,env);
     if (!['GET','HEAD'].includes(request.method)) assertSameOrigin(request);
-    if (request.method === 'GET' && !route.length) return json(await accountData(db,user));
+    if (request.method === 'GET' && !route.length) return json(await accountData(db,user,catalogue));
     if (request.method === 'PUT' && route[0] === 'profile' && route.length === 1) {
       const body=validateProfile(await bodyJson(request));await ensureCustomer(db,user);
       await query(db,'UPDATE customers SET full_name = ?,phone = ?,email = ?,updated_at = ? WHERE id = ?',body.fullName,body.phone,user.email,new Date().toISOString(),user.userId).run();
@@ -104,6 +107,9 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       if(!Array.isArray(body.items)||body.items.length>100)fail(400,'Hibás kosár.');
       const safe=sanitizeCart(body.items,catalogue.products);const total=cartTotals(safe,catalogue.products);
       if(!total.count||safe.length!==body.items.length)fail(400,'Üres vagy hibás kosár.');
+      assertAvailable(safe,catalogue);
+      const discount=body.couponCode?await couponQuote(db,body.couponCode,total.totalMinor):null;
+      total.totalMinor-=discount?.discountMinor||0;
       const shipping=body.shipping?shippingQuote(shippingMethods(env),{country:body.shipping.country,methodId:body.shipping.shippingMethodId},total.totalMinor):null;
       if(body.shipping&&!shipping)fail(400,'Érvénytelen szállítási mód.');
       total.totalMinor+=shipping?.feeMinor||0;
@@ -112,7 +118,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       if(previous)return json({saved:true,...previous});
       const id=crypto.randomUUID(),number=`DEMO-${id.slice(0,8).toUpperCase()}`;
       const items=total.lines.map(line=>({productId:line.id,name:line.product.name,quantity:line.quantity,priceMinor:line.product.priceMinor,subtotalMinor:line.subtotalMinor}));
-      await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null).run();
+      await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null,discount?JSON.stringify(discount):null).run();
       const saved=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       return json({saved:true,...saved},201);
     }
@@ -125,7 +131,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       return new Response(object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="szamla-${filename}.pdf"`}});
     }
     if(request.method==='GET' && route.length===1 && route[0]==='export') {
-      const data=await accountData(db,user);
+      const data=await accountData(db,user,catalogue);
       data.marketingPreferences=await query(db,'SELECT email,status,consent_version,changed_at,sync_status,synced_at FROM marketing_preferences WHERE user_id=?',user.userId).first();
       data.payments=await rows(db,'SELECT id,status,total_minor,currency,mode,items_json,customer_json,created_at FROM payment_checkouts WHERE user_id=? ORDER BY created_at DESC LIMIT 100',user.userId);
       return new Response(JSON.stringify({exportedAt:new Date().toISOString(),...data},null,2),{headers:{...headers,'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="spice-laboratory-fiok.json"'}});
@@ -138,7 +144,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
     }
     return json({error:'Nem található művelet.'},404);
   } catch(error) {
-    if(error instanceof RequestError)return json({error:error.message},error.status);
+    if(error instanceof RequestError||error?.name==='StoreError'||Number.isInteger(error?.status))return json({error:error.message},error.status);
     if(error instanceof URIError)return json({error:'Hibás útvonal.'},400);
     return json({error:'A fiókművelet most nem hajtható végre. Próbáld újra később.'},500);
   }

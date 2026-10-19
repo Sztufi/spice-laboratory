@@ -28,3 +28,6 @@
  .home-catalogue-link .secondary-button{width:100%}
 }
 .menu-item-icon{display:block;flex:0 0 26px;width:26px;height:26px;color:#000}
+.account-entry>strong{align-items:center}
+.account-entry-icon{display:block;flex:0 0 30px;width:30px;height:30px;overflow:visible}
+@media(max-width:400px){.account-entry>strong{font-size:23px;gap:6px}.account-entry-icon{flex-basis:25px;width:25px;height:25px}}

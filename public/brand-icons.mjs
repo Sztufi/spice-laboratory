@@ -1,5 +1,6 @@
 // Shared by server-rendered pages and interactive storefront/admin panels.
 const shapes={
+ cart:'<path fill-rule="evenodd" d="m0 1 7 1 2 5 22-1-4 15-16 2 1 3h16v4H9L4 7 0 6Zm11 11 2 6 10-1 2-6Z"/><path d="M11 26a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm14 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/>',
  profile:'<path d="M10 3 18 2l5 5-1 8-6 4-7-4-1-7Zm-7 27 2-8 8-3 6 1 9 5 1 5Z"/>',
  pin:'<path fill-rule="evenodd" d="M16 1C8 1 3 7 4 14c1 6 8 13 13 17 4-5 11-13 11-19C28 5 23 0 16 1Zm0 7a5 5 0 1 0 1 10 5 5 0 0 0-1-10Z"/>',
  heart:'<path d="M16 7C9-3 0 3 1 12c1 7 9 13 16 19 6-7 14-13 14-21C31 1 20-2 16 7Z"/>',

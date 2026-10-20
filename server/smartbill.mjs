@@ -20,7 +20,10 @@ async function providerGet(config,env,path,params,fetcher=fetch){
  const url=new URL('https://ws.smartbill.ro/SBORO/api/'+path);url.searchParams.set('cif',config.companyVatCode);
  for(const [key,value] of Object.entries(params||{}))url.searchParams.set(key,value);
  let response;
- try{response=await fetcher(url.href,{method:'GET',headers:{Authorization:'Basic '+btoa(config.email+':'+env.SMARTBILL_API_TOKEN),Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(12000)});}catch{fail(502,'A SmartBill nem válaszolt. Próbáld újra később.');}
+ try{response=await fetcher(url.href,{method:'GET',headers:{Authorization:'Basic '+btoa(config.email+':'+env.SMARTBILL_API_TOKEN),Accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(12000)});}catch{fail(502,'A SmartBill nem válaszolt. Próbáld újra később.');}
+ // Workers supports manual redirects, not redirect:error. Reject every redirect
+ // without reading its body or forwarding the Basic credential to Location.
+ if(response.status>=300&&response.status<400){await response.body?.cancel();fail(502,'A SmartBill átirányítást küldött. Biztonsági okból nem követtük.');}
  if(!response.ok){
   const message=response.status===401?'A SmartBill elutasította az e-mail-címet vagy a V1-tokent.':response.status===403?'A SmartBill-felhasználó jogosultsága nem elegendő.':response.status===429?'A SmartBill kérési korlátja elérve. Várj a következő próbáig.':'A SmartBill lekérdezése sikertelen. Ellenőrizd a cég- és raktárbeállításokat.';
   fail(response.status===429?429:502,message);

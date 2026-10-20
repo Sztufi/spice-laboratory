@@ -26,11 +26,19 @@ test('connection test uses saved settings and read-only fixed provider URL; prov
  const {db}=database();const call=(request,extra={})=>handleAdminRequest(request,{db,user:owner,env,...extra});
  await call(req('/settings/smartbill','PUT',settings));
  let count=0;
- const fetcher=async(url,options)=>{count++;assert.equal(new URL(url).origin,'https://ws.smartbill.ro');assert.equal(new URL(url).pathname,'/SBORO/api/series');assert.equal(new URL(url).searchParams.get('cif'),'50028326');assert.equal(options.method,'GET');assert.equal(options.redirect,'error');assert.equal(atob(options.headers.Authorization.slice(6)),'changed@example.com:'+env.SMARTBILL_API_TOKEN);return Response.json({errorText:'',list:[{name:'SL-HU',type:'f',nextNumber:1},{name:'NIR',type:'n',nextNumber:5}]});};
+ const fetcher=async(url,options)=>{count++;assert.equal(new URL(url).origin,'https://ws.smartbill.ro');assert.equal(new URL(url).pathname,'/SBORO/api/series');assert.equal(new URL(url).searchParams.get('cif'),'50028326');assert.equal(options.method,'GET');assert.equal(options.redirect,'manual');assert.equal(atob(options.headers.Authorization.slice(6)),'changed@example.com:'+env.SMARTBILL_API_TOKEN);return Response.json({errorText:'',list:[{name:'SL-HU',type:'f',nextNumber:1},{name:'NIR',type:'n',nextNumber:5}]});};
  const response=await call(req('/smartbill/test','POST',{}),{fetcher});assert.equal(response.status,200);const result=await response.json();assert.equal(result.connected,true);assert.equal(result.selectedSeriesFound,true);assert.equal(result.series.length,1);assert.equal(result.warehouseVerified,false);assert.equal(count,1);
  const error=await call(req('/smartbill/test','POST',{}),{fetcher:async()=>Response.json({errorText:'<script>'+env.SMARTBILL_API_TOKEN+'</script>',list:[]})});assert.equal(error.status,502);assert.ok(!(await error.text()).includes(env.SMARTBILL_API_TOKEN));
  const denied=await call(req('/smartbill/test','POST',{}),{fetcher:async()=>new Response(env.SMARTBILL_API_TOKEN,{status:401})});assert.equal(denied.status,502);assert.ok(!(await denied.text()).includes(env.SMARTBILL_API_TOKEN));
  const missing=await call(req('/smartbill/test','POST',{}),{env:{...env,SMARTBILL_API_TOKEN:''},fetcher});assert.equal(missing.status,503);assert.equal(count,1);
+});
+test('redirects never forward credentials or expose their destination/body',async()=>{
+ const {db}=database();
+ for(const status of [301,302,303,307,308]){
+  let calls=0;
+  const response=await handleAdminRequest(req('/smartbill/test','POST',{}),{db,user:owner,env,fetcher:async(url,options)=>{calls++;assert.equal(new URL(url).origin,'https://ws.smartbill.ro');assert.equal(options.redirect,'manual');return new Response('private-provider-body-'+env.SMARTBILL_API_TOKEN,{status,headers:{Location:'https://other.example/private-destination'}});}});
+  assert.equal(response.status,502);assert.equal(calls,1);const body=await response.text();assert.match(body,/átirányítást/);assert.ok(!body.includes(env.SMARTBILL_API_TOKEN));assert.ok(!body.includes('private-destination'));
+ }
 });
 test('stock query filters by exact SKU and warehouse without changing stock; empty results are not invented zeroes',async()=>{
  const {db,sqlite}=database();const call=(request,extra={})=>handleAdminRequest(request,{db,user:owner,env,...extra});

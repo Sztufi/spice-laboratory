@@ -71,6 +71,20 @@
       "when": 1792481322158,
       "tag": "0009_thin_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792492544758,
+      "tag": "0010_closed_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792492988345,
+      "tag": "0011_flippant_chameleon",
+      "breakpoints": true
     }
   ]
 }

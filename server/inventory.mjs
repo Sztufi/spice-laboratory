@@ -2,6 +2,7 @@ import {all,query as q,loadStore,recordDefaults,fail,StoreError,text} from './st
 import {smartbillConfig,providerGet} from './smartbill.mjs';
 import {sourceKey,stockDate} from './inventory-model.mjs';
 import {verifiedSkus,mappingNotes} from './product-skus.mjs';
+import {restockOverview} from './restock.mjs';
 const timestamp=()=>new Date().toISOString();
 const currentState=db=>q(db,"SELECT * FROM store_inventory_sync WHERE id='smartbill'").first();
 const pieceUnit=unit=>['buc','buc.','db'].includes(String(unit).trim().toLowerCase());
@@ -66,7 +67,8 @@ export async function requireFreshInventory(db,env,fetcher){
 }
 export async function inventoryOverview(db,env){
  const [config,{catalogue},state,pending]=await Promise.all([smartbillConfig(db,env),loadStore(db,{admin:true,env}),currentState(db),all(db,`SELECT m.order_id,m.product_id,m.sku,m.quantity,m.created_at,o.number FROM store_stock_movements m LEFT JOIN customer_orders o ON o.id=m.order_id WHERE m.smartbill_confirmed_at IS NULL ORDER BY m.created_at LIMIT 200`)]);
- return {enabled:config.stockSync,warehouseName:config.warehouseName,intervalSeconds:60,maxAgeSeconds:300,state:state?{status:state.status,lastAttemptAt:state.last_attempt_at,lastSuccessAt:state.last_success_at,nextAttemptAt:state.next_attempt_at,error:state.error}:null,products:catalogue.products.map(p=>({id:p.id,name:p.name,sku:p.sku||'',mappingNote:!p.sku?mappingNotes[p.id]||'Add meg a késztermék SmartBill Cod produs értékét.':'',status:p.status,revision:p.revision,safetyStock:p.safetyStock||0,lowStockThreshold:p.lowStockThreshold??5,stockQuantity:p.stockQuantity,availableQuantity:p.availableQuantity??(p.manageStock?p.stockQuantity:null),inventory:p.inventory||{status:'manual',label:'Kézi készlet'}})),pending};
+ const restock=await restockOverview(db);
+ return {restock,enabled:config.stockSync,warehouseName:config.warehouseName,intervalSeconds:60,maxAgeSeconds:300,state:state?{status:state.status,lastAttemptAt:state.last_attempt_at,lastSuccessAt:state.last_success_at,nextAttemptAt:state.next_attempt_at,error:state.error}:null,products:catalogue.products.map(p=>({id:p.id,name:p.name,sku:p.sku||'',mappingNote:!p.sku?mappingNotes[p.id]||'Add meg a késztermék SmartBill Cod produs értékét.':'',status:p.status,revision:p.revision,safetyStock:p.safetyStock||0,lowStockThreshold:p.lowStockThreshold??5,stockQuantity:p.stockQuantity,availableQuantity:p.availableQuantity??(p.manageStock?p.stockQuantity:null),inventory:p.inventory||{status:'manual',label:'Kézi készlet'}})),pending};
 }
 export async function assertMappingChange(db,original,sku){
  if(!original||original.sku===sku)return;

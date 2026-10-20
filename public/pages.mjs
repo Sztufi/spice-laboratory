@@ -5,6 +5,7 @@ import {purchaseQuantity,purchaseCost} from './product-purchase.mjs';
 import {formatMoney} from './money.mjs';
 import {mountScrollMarquee} from './scroll-marquee.mjs';
 import {mountProductGallery} from './product-gallery.mjs';
+import './restock.mjs';
 for(const band of document.querySelectorAll('[data-scroll-marquee]'))mountScrollMarquee(band);
 function paintFavorites(){
  for(const button of document.querySelectorAll('[data-favorite]')){
@@ -41,7 +42,7 @@ if(quantityInput&&product){
   for(const node of document.querySelectorAll('[data-purchase-total]'))node.textContent=formatMoney(product.priceMinor*quantity,'HUF');
   for(const node of document.querySelectorAll('[data-sticky-quantity]'))node.textContent=String(quantity);
   for(const button of document.querySelectorAll('[data-quantity-step]'))button.disabled=product.inStock===false||(Number(button.dataset.quantityStep)<0?quantity<=1:quantity>=99);
-  document.querySelector('[data-purchase-shipping]').innerHTML=styleIcons(purchaseCost(product,methods,quantity));
+  const shipping=document.querySelector('[data-purchase-shipping]');shipping.hidden=product.inStock===false;shipping.innerHTML=styleIcons(purchaseCost(product,methods,quantity));
  }
  quantityInput.addEventListener('change',refreshPurchase);
  window.addEventListener('spice:stock-change',()=>{quantityInput.disabled=product.inStock===false;refreshPurchase();});

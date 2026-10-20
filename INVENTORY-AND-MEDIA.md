@@ -1,5 +1,24 @@
 # Inventory and product media
 
+## Back-in-stock requests
+
+Unavailable products replace purchase CTAs with a purple email notification CTA.
+Verified zero stock and manual zero stock show the diagonal purple sold-out ribbon;
+unverified stock never claims to be sold out. Guest opt-in stores one request per
+product/email, without joining the newsletter or changing marketing consent.
+Requests expire after 180 days and can be cancelled through the email link.
+
+After storefront and stock API reads, response-background processing checks the
+current catalogue, verifies the dedicated Omnisend workflow is enabled, and claims
+up to 20 requests atomically. It sends one custom event per request. Accepted
+events mean Omnisend accepted the request, not confirmed inbox delivery. Ambiguous
+failures stay in review and are never automatically retried. Inventory admin shows
+waiting, accepted, in-flight and review counts. There is no unattended cron: stock
+reads currently depend on traffic and open-storefront polling, so an idle store
+does not detect replenishment until its next stock check.
+
+Omnisend workflow: https://app.omnisend.com/automation/edit/6ad743fd9a21c7aaedc000d5
+
 ## SmartBill stock
 
 `/admin?tab=inventory` lists every product's exact SKU, provider quantity,

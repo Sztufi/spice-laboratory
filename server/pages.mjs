@@ -117,7 +117,7 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  html=html.replace('</head>','<link rel="stylesheet" href="/privacy-consent.css"></head>').replace('</body>','<section id="privacy-choice" role="region" aria-labelledby="privacy-title" hidden><h2 id="privacy-title">A SÜTIKRŐL TE DÖNTESZ.</h2><p>A szükséges tárolás működteti a kosarat és a belépést. Engedélyeddel az Omnisend marketingcélból követheti az oldalmegtekintéseidet és személyre szabhatja az ajánlatokat. Ez nem hírlevél-feliratkozás. Bármikor módosíthatod a lábléc Sütibeállítások pontjában. <a href="/sutik">Részletek</a></p><div class="privacy-actions"><button type="button" data-privacy-reject>Csak a szükségesek</button><button type="button" data-privacy-accept>Marketinget is engedélyezek</button></div></section><p id="privacy-storage-status" role="status" hidden></p><script type="module" src="/privacy-consent.mjs"></script></body>');
  html=optimizeImages(html);
  html=html.replace('</head>','<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800;900&family=DM+Sans:wght@400;600;700&display=swap"></head>');
- html=styleIcons(html).replace('</head>','<link rel="stylesheet" href="/brand-icons.css"></head>');
+ html=styleIcons(html).replace('</head>','<link rel="stylesheet" href="/brand-icons.css"><link rel="stylesheet" href="/restock.css"></head>');
  return {html,status,title:fullTitle};
 }
 

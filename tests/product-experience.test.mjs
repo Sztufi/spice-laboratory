@@ -27,12 +27,14 @@ test('purchase estimate uses selected quantity, cheapest approved country method
  assert.ok(!purchaseCost(product,[methods[1]],1).includes('0 Ft'));
  assert.ok(purchaseCost(product,[{...method,label:'<img src=x onerror=alert(1)>'}]).includes('&lt;img'));
 });
-test('edited merchant product keeps its price, safe markup and disabled purchase states across both CTAs',()=>{
+test('edited merchant product keeps its price and safe markup, and replaces both sold-out purchase CTAs with notifications',()=>{
  const changed={...product,id:'merchant-product',name:'<script>merchant</script>',priceMinor:199000,regularPriceMinor:275000,inStock:false};
  const catalogue={...seedCatalogue,products:[changed,...seedCatalogue.products.slice(1)]};
  const {html,status}=renderSitePage(base,{pathname:'/termek/merchant-product',catalogue});
  assert.equal(status,200);assert.ok(html.includes('1990 Ft'));assert.ok(html.includes('<del aria-label="Korábbi ár">2750 Ft</del>'));
- assert.equal((html.match(/data-use-product-quantity disabled/g)||[]).length,2);
+ assert.equal((html.match(/data-action="restock" data-id="merchant-product"/g)||[]).length,2);
+ assert.ok(!html.includes('data-action="add" data-id="merchant-product"'));
+ assert.match(html,/ELFOGYOTT!/);
  assert.ok(html.includes('id="product-quantity"'));assert.ok(html.includes('id="product-ingredients"'));
  assert.ok(html.includes('<details class="source-details" open>'));
  assert.ok(!html.includes('<script>merchant</script>'));assert.ok(!html.includes('aggregateRating'));

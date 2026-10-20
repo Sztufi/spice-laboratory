@@ -1,4 +1,9 @@
 import { sqliteTable, text, integer, primaryKey, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+export const restockRequests=sqliteTable('restock_requests',{
+ id:text('id').primaryKey(),productId:text('product_id').notNull(),email:text('email').notNull(),
+ status:text('status').notNull().default('waiting'),cancelToken:text('cancel_token').notNull(),consentVersion:text('consent_version').notNull().default('restock-v1'),
+ createdAt:text('created_at').notNull(),expiresAt:text('expires_at').notNull(),sentAt:text('sent_at')
+},table=>[uniqueIndex('restock_product_email').on(table.productId,table.email),index('restock_waiting').on(table.status,table.createdAt)]);
 export const customers = sqliteTable('customers', {
   id: text('id').primaryKey(), email: text('email').notNull(), fullName: text('full_name').notNull().default(''),
   phone: text('phone').notNull().default(''), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()

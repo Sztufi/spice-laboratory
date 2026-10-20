@@ -1,0 +1,1 @@
+ALTER TABLE `restock_requests` ADD `consent_version` text DEFAULT 'restock-v1' NOT NULL;

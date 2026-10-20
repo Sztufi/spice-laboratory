@@ -9,6 +9,8 @@ import {staticImageResponse} from '../server/image-response.mjs';
 import {googleCustomer} from '../server/google-auth.mjs';
 import {magicCustomer} from '../server/magic-auth.mjs';
 import {syncInventory} from '../server/inventory.mjs';
+import {dispatchRestock} from '../server/restock.mjs';
+import {after} from 'next/server';
 export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
  const url=new URL(request.url);
@@ -30,6 +32,7 @@ export async function GET(request: Request) {
  try{
   if(url.pathname==='/'||url.pathname==='/termekek'||url.pathname.startsWith('/termek/')||url.pathname.startsWith('/kategoria/'))await syncInventory(env.DB,env);
   const store=await loadStore(env.DB,{env});
+  after(async()=>{try{await dispatchRestock({db:env.DB,env},store.catalogue);}catch{console.error('Restock queue processing failed');}});
   const shipping=store.settings.find((item:{id:string;methods:unknown})=>item.id==='shipping');
   const settings=shipping?{...env,SHIPPING_METHODS_JSON:JSON.stringify(shipping.methods)}:env;
   const redirect=seoRedirect(url.pathname,store.catalogue.categories);if(redirect){url.pathname=redirect;return Response.redirect(url.href,308);}

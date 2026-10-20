@@ -2,6 +2,7 @@ import { shippingMethods, shippingQuote, SHIPPING_COUNTRIES } from './shipping.m
 import { guestCheckoutAccess, issueGuestCheckoutAccess } from './guest-checkout.mjs';
 import {loadStore,runtimeEnv,assertAvailable,reserveStock,stockSettlementStatements,couponQuote,StoreError} from './store.mjs';
 import {subscribeNewsletter} from './newsletter.mjs';
+import {subscribeRestock,cancelRestock,dispatchRestock} from './restock.mjs';
 import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
 import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
@@ -152,6 +153,7 @@ export async function handleCommerceRequest(request,ctx){
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stock'&&request.method==='GET'){
   const sync=await syncInventory(db,env,{fetcher:ctx.fetcher}),{catalogue}=await loadStore(db,{env});
+  if(ctx.background)ctx.background(()=>dispatchRestock(ctx,catalogue));else await dispatchRestock(ctx,catalogue);
   return json({enabled:sync.enabled,products:catalogue.products.map(p=>({id:p.id,inStock:p.inStock,stockStatus:p.stockStatus}))});
  }
  if(path==='stripe-webhook'&&request.method==='POST'){
@@ -165,6 +167,8 @@ export async function handleCommerceRequest(request,ctx){
  await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({received:true});
  }
  if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
+ if(path==='restock'&&request.method==='POST')return json(await subscribeRestock(await body(request),request,ctx));
+ if(path==='restock/cancel'&&request.method==='POST')return json(await cancelRestock(await body(request),ctx));
  if(path==='withdrawal'&&request.method==='POST')return await handleWithdrawal(request,ctx);
  if(path==='newsletter'&&request.method==='POST'){
   const result=await subscribeNewsletter(request,ctx,config,CONSENT_TEXT);return json(result,result.synced?200:202);

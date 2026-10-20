@@ -188,6 +188,7 @@ export const seedCatalogue = {
       "categories": [
         "bbq"
       ],
+      "uses": ["chicken", "pork"],
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -268,6 +269,7 @@ export const seedCatalogue = {
       "categories": [
         "topping"
       ],
+      "uses": ["vegetable"],
       "weightGrams": 210,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -324,6 +326,7 @@ export const seedCatalogue = {
       "categories": [
         "dip"
       ],
+      "uses": ["vegetable"],
       "weightGrams": 130,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -376,6 +379,7 @@ export const seedCatalogue = {
       "categories": [
         "bbq"
       ],
+      "uses": ["pork", "chicken"],
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -444,6 +448,7 @@ export const seedCatalogue = {
       "categories": [
         "topping"
       ],
+      "uses": ["vegetable"],
       "weightGrams": 140,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -496,6 +501,7 @@ export const seedCatalogue = {
       "categories": [
         "bbq"
       ],
+      "uses": ["beef"],
       "weightGrams": 160,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -564,6 +570,7 @@ export const seedCatalogue = {
       "categories": [
         "international"
       ],
+      "uses": ["beef", "pork", "fish", "vegetable", "chicken"],
       "weightGrams": 100,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -628,6 +635,7 @@ export const seedCatalogue = {
       "categories": [
         "bbq"
       ],
+      "uses": ["beef", "pork", "vegetable", "chicken"],
       "weightGrams": 180,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -689,6 +697,7 @@ export const seedCatalogue = {
         "international",
         "bbq"
       ],
+      "uses": ["beef", "pork", "fish", "vegetable", "chicken"],
       "weightGrams": 140,
       "priceMinor": 275000,
       "currency": "HUF",
@@ -761,6 +770,7 @@ export const seedCatalogue = {
       "categories": [
         "dip"
       ],
+      "uses": ["vegetable"],
       "weightGrams": 150,
       "priceMinor": 275000,
       "currency": "HUF",

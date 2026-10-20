@@ -1,15 +1,23 @@
 export const MAX_QUANTITY = 99;
+export const PRODUCT_USES = [
+  { id: 'beef', label: 'Marha', icon: 'cow' },
+  { id: 'pork', label: 'Disznó', icon: 'pig' },
+  { id: 'fish', label: 'Hal', icon: 'fish' },
+  { id: 'vegetable', label: 'Zöldség', icon: 'vegetable' },
+  { id: 'chicken', label: 'Csirke', icon: 'chicken' }
+];
 
 export function normalize(value) {
   return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('hu').trim();
 }
 
 export function filterProducts(products, options = {}, ingredientDefinitions = []) {
-  const { query = '', category = '', ingredients = [], match = 'all', sort = 'default' } = options;
+  const { query = '', category = '', ingredients = [], uses = [], match = 'all', sort = 'default' } = options;
   const labels = new Map(ingredientDefinitions.map(item => [item.id, item.label]));
   const words = normalize(query).split(/\s+/).filter(Boolean);
   const result = products.filter(product => {
     if (category && !product.categories.includes(category)) return false;
+    if (uses.length && !uses.some(id => product.uses?.includes(id))) return false;
     const ids = new Set(product.ingredients.map(item => item.id));
     if (ingredients.length && !(match === 'any'
       ? ingredients.some(id => ids.has(id))
@@ -75,10 +83,12 @@ export function readFilters(search, data) {
   const params = new URLSearchParams(search);
   const knownIngredients = new Set(data.ingredients.map(item => item.id));
   const category = params.get('category') || '';
+  const knownUses = new Set(PRODUCT_USES.map(item => item.id));
   return {
     query: (params.get('q') || '').slice(0, 150),
     category: data.categories.some(item => item.id === category) ? category : '',
     ingredients: [...new Set(params.getAll('ingredient').filter(id => knownIngredients.has(id)))],
+    uses: [...new Set(params.getAll('use').filter(id => knownUses.has(id)))],
     match: params.get('match') === 'any' ? 'any' : 'all',
     sort: ['name', 'weight'].includes(params.get('sort')) ? params.get('sort') : 'default'
   };
@@ -86,10 +96,11 @@ export function readFilters(search, data) {
 
 export function writeFilters(filters, currentSearch = '') {
   const params = new URLSearchParams(currentSearch);
-  for (const key of ['q', 'category', 'ingredient', 'match', 'sort']) params.delete(key);
+  for (const key of ['q', 'category', 'ingredient', 'use', 'match', 'sort']) params.delete(key);
   if (filters.query) params.set('q', filters.query);
   if (filters.category) params.set('category', filters.category);
   for (const id of filters.ingredients) params.append('ingredient', id);
+  for (const id of filters.uses || []) params.append('use', id);
   if (filters.match === 'any' && filters.ingredients.length) params.set('match', 'any');
   if (filters.sort !== 'default') params.set('sort', filters.sort);
   return params.toString();

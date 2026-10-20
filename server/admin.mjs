@@ -19,6 +19,7 @@ const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Ty
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
 const states=['draft','published','archived'];
+const productUses=new Set(['beef','pork','fish','vegetable','chicken']);
 const time=()=>new Date().toISOString();
 const int=(value,min,max)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail(400,'Hibás számérték.');return value;};
 const list=(value,max=100)=>{if(!Array.isArray(value)||value.length>max)fail(400,'Hibás lista.');return value;};
@@ -40,13 +41,14 @@ function validate(kind,input,store){
  const status=input.status||'draft';if(!states.includes(status))fail(400,'Hibás közzétételi állapot.');
  let data;
  if(kind==='product'){
-  const categories=strings(input.categories||[]),ingredientIds=strings(input.ingredientIds||input.ingredients?.map(item=>item.id)||[]);
+  const categories=strings(input.categories||[]),ingredientIds=strings(input.ingredientIds||input.ingredients?.map(item=>item.id)||[]),uses=strings(input.uses||[]);
+  if(uses.some(item=>!productUses.has(item)))fail(400,'Ismeretlen felhasználási szűrő.');
   if(categories.some(key=>!store.catalogue.categories.some(item=>item.id===key&&item.status!=='archived'))||ingredientIds.some(key=>!store.catalogue.ingredients.some(item=>item.id===key&&item.status!=='archived')))fail(400,'Ismeretlen kategória vagy összetevő.');
   if(status==='published'&&(!categories.length||!ingredientIds.length||categories.some(key=>!store.catalogue.categories.some(item=>item.id===key&&item.status==='published'))||ingredientIds.some(key=>!store.catalogue.ingredients.some(item=>item.id===key&&item.status==='published'))))fail(400,'Közzétételhez aktív kategória és aktív összetevőlista is szükséges.');
   const original=store.catalogue.products.find(item=>item.id===id)||{};
   const ingredients=ingredientIds.map(key=>({id:key,sourceLabel:input.ingredients?.find(item=>item.id===key)?.sourceLabel||store.catalogue.ingredients.find(item=>item.id===key).label}));
   const sku=text(input.sku,80);if(!sku||/[\r\n\t]/.test(sku))fail(400,'A SKU / SmartBill Cod produs kötelező, egy sorban megadva.');
-  data={id,name:text(input.name,120,true),subtitle:text(input.subtitle,180),description:text(input.description,5000),sku,currency:'HUF',priceMinor:int(input.priceMinor,1,100000000),weightGrams:int(input.weightGrams,1,100000),categories,ingredients,image:imageUrl(input.image),color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#f2b4d0',manageStock:input.manageStock===true,stockQuantity:int(input.stockQuantity??0,0,1000000),salePriceMinor:input.salePriceMinor?int(input.salePriceMinor,1,input.priceMinor):null,
+  data={id,name:text(input.name,120,true),subtitle:text(input.subtitle,180),description:text(input.description,5000),sku,currency:'HUF',priceMinor:int(input.priceMinor,1,100000000),weightGrams:int(input.weightGrams,1,100000),categories,uses,ingredients,image:imageUrl(input.image),color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#f2b4d0',manageStock:input.manageStock===true,stockQuantity:int(input.stockQuantity??0,0,1000000),salePriceMinor:input.salePriceMinor?int(input.salePriceMinor,1,input.priceMinor):null,
    safetyStock:int(input.safetyStock??original.safetyStock??0,0,1000000),lowStockThreshold:int(input.lowStockThreshold??original.lowStockThreshold??5,0,1000000),sourceIngredientText:text(input.sourceIngredientText,5000)||ingredients.map(item=>item.sourceLabel).join(', '),traceStatementOriginal:text(input.traceStatementOriginal,1500),sourceUrl:original.sourceUrl||'',sourceAttributeIngredientText:original.sourceAttributeIngredientText||'',sourceConflict:original.sourceConflict||false};
   Object.assign(data,productMedia(input,original));
  }else if(kind==='category'){

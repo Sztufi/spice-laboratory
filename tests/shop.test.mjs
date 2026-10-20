@@ -37,6 +37,12 @@ test('multiple ingredient filters support intersection and union with category f
   assert.deepEqual(select({ category: 'dip', ingredients: ['garlic'] }), ['grr-lick', 'sweet-onion']);
 });
 
+test('use filters return every selected meal match and combine with the other filters', () => {
+  assert.deepEqual(select({ uses: ['fish'] }), ['chimichurri', 'cajun-mix']);
+  assert.deepEqual(select({ uses: ['beef', 'fish'] }), ['bulls-blaze', 'chimichurri', 'grill-salt', 'cajun-mix']);
+  assert.deepEqual(select({ category: 'bbq', uses: ['chicken'] }), ['rooster-booster', 'redneck-dust', 'grill-salt', 'cajun-mix']);
+});
+
 test('search works with Hungarian accents and Romanian ingredient names', () => {
   assert.deepEqual(select({ query: 'citromhej' }), ['rooster-booster', 'sweet-onion']);
   assert.deepEqual(select({ query: 'levendula' }), ['bulls-blaze']);
@@ -89,13 +95,13 @@ test('totals use integer catalogue prices instead of untrusted stored prices', (
 });
 
 test('filter URLs round-trip, reject invalid values and preserve unrelated parameters', () => {
-  const parsed = readFilters('?q=Citromh%C3%A9j&category=dip&ingredient=lemon-peel&ingredient=bad&ingredient=lemon-peel&match=any&sort=weight', catalogue);
-  assert.deepEqual(parsed, { query: 'Citromhéj', category: 'dip', ingredients: ['lemon-peel'], match: 'any', sort: 'weight' });
+  const parsed = readFilters('?q=Citromh%C3%A9j&category=dip&ingredient=lemon-peel&ingredient=bad&ingredient=lemon-peel&use=beef&use=bad&use=fish&match=any&sort=weight', catalogue);
+  assert.deepEqual(parsed, { query: 'Citromhéj', category: 'dip', ingredients: ['lemon-peel'], uses: ['beef', 'fish'], match: 'any', sort: 'weight' });
   const written = writeFilters(parsed, '?utm_source=test&ingredient=bad');
   assert.equal(new URLSearchParams(written).get('utm_source'), 'test');
   assert.deepEqual(readFilters(written, catalogue), parsed);
   const invalid = readFilters('?category=missing&sort=missing&ingredient=missing&match=missing', catalogue);
-  assert.deepEqual(invalid, { query: '', category: '', ingredients: [], match: 'all', sort: 'default' });
+  assert.deepEqual(invalid, { query: '', category: '', ingredients: [], uses: [], match: 'all', sort: 'default' });
 });
 
 test('the page loads its local storefront module without submitting HTML forms to external services', () => {

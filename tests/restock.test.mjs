@@ -57,10 +57,10 @@ test('provider timeout or rejection remains reviewable and cannot trigger blind 
  await dispatchRestock({db,env,fetcher:ambiguous},catalogue);await dispatchRestock({db,env,fetcher:ambiguous},catalogue);
  assert.equal(attempts,1);assert.equal(sqlite.prepare('SELECT status FROM restock_requests').get().status,'review');
 });
-test('unavailable products have no purchase CTA, have a purple ribbon only when sold out, and keep product links',()=>{
+test('unavailable products have no purchase CTA, have a purple ribbon while inventory is being verified, and keep product links',()=>{
  const {p}=setup();p.inStock=false;
  const card=productCard(p),page=productExperience(p,{label:'Dip'},{shippingMethods:[]});
  for(const html of [card,page]){assert.ok(!html.includes('data-action="add"'));assert.match(html,/data-action="restock"/);assert.match(html,/restock-button/);assert.match(html,/ELFOGYOTT!/);}
- assert.match(card,/href="\/termek\/waiting-spice"/);assert.equal(soldOut({...p,stockStatus:'unverified'}),false);
+ assert.match(card,/href="\/termek\/waiting-spice"/);assert.equal(soldOut({...p,stockStatus:'unverified'}),true);
  assert.ok(!productCard({...p,inStock:true}).includes('ELFOGYOTT!'));
 });

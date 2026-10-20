@@ -1,6 +1,8 @@
 import {brandIcon} from './brand-icons.mjs';
 import {escapeHtml as h} from './html-escape.mjs';
-export const soldOut=product=>product.inStock===false&&product.stockStatus!=='unverified';
+// Keep the customer-facing state consistent: if a product cannot be bought,
+// its card and gallery must show the same unavailable state.
+export const soldOut=product=>product.inStock===false;
 export const stockRibbon=product=>soldOut(product)?'<span class="sold-out-ribbon">ELFOGYOTT!</span>':'';
 export function purchaseButton(product,{card=false,sticky=false}={}){
  const unavailable=product.inStock===false;

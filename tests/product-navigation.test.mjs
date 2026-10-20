@@ -23,3 +23,16 @@ test('quick-view modal and triggers are absent from home, listing, category, pro
  const script=readFileSync(new URL('../public/shop.mjs',import.meta.url),'utf8');assert.ok(!script.includes('product-dialog'));assert.ok(!script.includes('showProduct'));
  const account=readFileSync(new URL('../public/account.mjs',import.meta.url),'utf8');assert.ok(account.includes('<a class="account-favorite-photo" href="/termek/'));assert.ok(!account.includes('data-action="detail"'));
 });
+
+test('product edit shortcut is owner-only and targets the exact product, without exposing it to shoppers',()=>{
+ for(const product of seedCatalogue.products){
+  const pathname='/termek/'+product.id;
+  for(const options of [{},{authenticated:true,isAdmin:false}]){
+   assert.ok(!renderSitePage(base,{pathname,...options}).html.includes('class="product-admin-edit"'));
+  }
+  const admin=renderSitePage(base,{pathname,authenticated:true,isAdmin:true}).html;
+  assert.ok(admin.includes(`href="/admin?tab=products&amp;editProduct=${encodeURIComponent(product.id)}"`));
+  assert.match(admin,/class="product-admin-edit"[^>]*>.*Termék szerkesztése/);
+ }
+ assert.ok(!renderSitePage(base,{pathname:'/termekek',isAdmin:true}).html.includes('class="product-admin-edit"'));
+});

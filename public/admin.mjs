@@ -163,6 +163,15 @@ document.addEventListener('submit',async event=>{
   await refresh();notice('A módosításokat elmentettük.');
  }catch(error){if(form.id==='shipping-form'){const node=$('#shipping-error');node.hidden=false;node.textContent=error.message;}else editorError(error.message);}finally{submit.disabled=false;}
 });
-try{await refresh();}catch(error){$('#admin-panel').innerHTML=styleIcons(`<section class="admin-card"><h2>NEM ÉRHETŐ EL AZ ADMIN.</h2><p>${h(error.message)}</p>${error.status===401?'<a class="button" target="_top" href="/fiok?next=%2Fadmin">Belépés az adminfiókkal ↗</a>':'<a class="button light" href="/admin">Újrapróbálás</a>'}</section>`);}
+try{
+ await refresh();
+ const editProduct=new URLSearchParams(location.search).get('editProduct');
+ if(editProduct){
+  tab='products';render();
+  const product=data.records.product.find(record=>record.id===editProduct);
+  if(product)openEditor('products',product);
+  else notice('A szerkesztendő termék nem található. Lehet, hogy időközben törölték.',true);
+ }
+}catch(error){$('#admin-panel').innerHTML=styleIcons(`<section class="admin-card"><h2>NEM ÉRHETŐ EL AZ ADMIN.</h2><p>${h(error.message)}</p>${error.status===401?'<a class="button" target="_top" href="/fiok?next=%2Fadmin">Belépés az adminfiókkal ↗</a>':'<a class="button light" href="/admin">Újrapróbálás</a>'}</section>`);}
 
 $('#admin-editor').addEventListener('close',()=>{productMediaEditor?.dispose();productMediaEditor=null;recipeUploader?.dispose();recipeUploader=null;});

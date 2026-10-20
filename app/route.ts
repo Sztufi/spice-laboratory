@@ -23,7 +23,7 @@ export async function GET(request: Request) {
  const googleUser=await googleCustomer(request,env.DB,env);
  const user=adminPrincipal(await getChatGPTUser(),googleUser,env),isAdmin=isStoreAdmin(user,env);
  if(url.pathname.replace(/\/+$/,'')==='/admin'){
-  if(!user)return Response.redirect(url.origin+'/fiok?next=%2Fadmin',302);
+  if(!user)return Response.redirect(url.origin+'/fiok?next='+encodeURIComponent(url.pathname+url.search),302);
   if(!isAdmin)return new Response('<!doctype html><html lang="hu"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Nincs jogosultság</title><h1>Nincs adminisztrátori jogosultságod.</h1><p>Jelentkezz be az adminjogosultságú Google-fiókkal vagy a tulajdonosi tárhelyfiókkal.</p><a href="/fiok?next=%2Fadmin">Fiók megnyitása / fiókváltás</a></html>',{status:403,headers});
   return new Response(adminPage(),{headers});
  }

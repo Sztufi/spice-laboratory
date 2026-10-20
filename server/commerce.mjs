@@ -6,6 +6,7 @@ import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
 import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
 import {handleWithdrawal,withdrawalMailReady} from './withdrawals.mjs';
+import {syncInventory,requireFreshInventory} from './inventory.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -72,7 +73,7 @@ async function createCheckout(request,ctx,config,input){
  if(row.session_id){if(row.expires_at*1000<=Date.now())fail(409,'A fizetési hivatkozás lejárt. Indíts új fizetést.');return json({url:row.session_url,checkoutId:row.id,mode:row.mode});}
  // Never reuse a possibly forgotten Stripe idempotency key after its retention window.
  if(Date.now()-Date.parse(row.created_at)>23*60*60*1000)fail(409,'Ez a fizetési kísérlet lejárt. Indíts új fizetést.');
- if(config.mode==='live')await reserveStock(db,row.id,items);
+ if(config.mode==='live')await reserveStock(db,row.id,items,{env});
  const origin=new URL(request.url).origin;
  const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':shipping.country,success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
  if(user.email)params.set('customer_email',user.email);
@@ -149,6 +150,10 @@ export async function handleCommerceRequest(request,ctx){
  ctx={...ctx,env};
  if(request.method==='GET'&&path==='config')return json({...config,accountAvailable:!!user?.userId&&!!user?.email});
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
+ if(path==='stock'&&request.method==='GET'){
+  const sync=await syncInventory(db,env,{fetcher:ctx.fetcher}),{catalogue}=await loadStore(db,{env});
+  return json({enabled:sync.enabled,products:catalogue.products.map(p=>({id:p.id,inStock:p.inStock,stockStatus:p.stockStatus}))});
+ }
  if(path==='stripe-webhook'&&request.method==='POST'){
  const raw=await readLimited(request,262144);const event=await verifyStripeEvent(raw,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
  if(!['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired',...REFUND_EVENTS].includes(event.type))return json({received:true});
@@ -165,7 +170,7 @@ export async function handleCommerceRequest(request,ctx){
   const result=await subscribeNewsletter(request,ctx,config,CONSENT_TEXT);return json(result,result.synced?200:202);
  }
  if(path==='coupon-quote'&&request.method==='POST'){
-  const input=await body(request),{catalogue}=await loadStore(db),totals=validateItems(input.items,catalogue);
+  const input=await body(request),{catalogue}=await loadStore(db,{env}),totals=validateItems(input.items,catalogue);
   return json({discount:await couponQuote(db,input.code,totals.totalMinor)});
  }
  if(path==='checkout-access'&&request.method==='POST'){
@@ -177,7 +182,8 @@ export async function handleCommerceRequest(request,ctx){
   const input=await body(request);if(!['guest','account'].includes(input?.checkoutMode))fail(400,'Válassz vásárlási módot.');
   const principal=input.checkoutMode==='guest'?await guestCheckoutAccess(request,db):user;
   if(!principal?.userId||(input.checkoutMode==='account'&&!principal.email))fail(401,input.checkoutMode==='guest'?'A vendégpénztárhoz engedélyezd a szükséges sütiket, majd próbáld újra.':'A fiókkal vásárláshoz jelentkezz be.');
-  const {catalogue}=await loadStore(db);return await createCheckout(request,{...ctx,user:principal,catalogue},config,input);
+  if(config.stripeEnabled&&config.mode==='live')await requireFreshInventory(db,env,ctx.fetcher);
+  const {catalogue}=await loadStore(db,{env});return await createCheckout(request,{...ctx,user:principal,catalogue},config,input);
  }
  if(path==='claim-order'&&request.method==='POST'){
   if(!user?.userId||!user?.email)fail(401,'A rendelés fiókhoz kapcsolásához jelentkezz be.');

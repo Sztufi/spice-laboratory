@@ -11,8 +11,10 @@ import {assertSameOrigin} from './account.mjs';
 import {cartTotals} from '../public/shop-core.mjs';
 import {assertAvailable} from './store.mjs';
 import {shippingQuote} from './shipping.mjs';
-import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock} from './smartbill.mjs';
+import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock,smartbillConfig} from './smartbill.mjs';
 import {omnisendRead,omnisendWrite} from './admin-omnisend.mjs';
+import {inventoryOverview,syncInventory,reconcileStock,assertMappingChange} from './inventory.mjs';
+import {productMedia} from './product-media.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -45,7 +47,8 @@ function validate(kind,input,store){
   const ingredients=ingredientIds.map(key=>({id:key,sourceLabel:input.ingredients?.find(item=>item.id===key)?.sourceLabel||store.catalogue.ingredients.find(item=>item.id===key).label}));
   const sku=text(input.sku,80);if(!sku||/[\r\n\t]/.test(sku))fail(400,'A SKU / SmartBill Cod produs kötelező, egy sorban megadva.');
   data={id,name:text(input.name,120,true),subtitle:text(input.subtitle,180),description:text(input.description,5000),sku,currency:'HUF',priceMinor:int(input.priceMinor,1,100000000),weightGrams:int(input.weightGrams,1,100000),categories,ingredients,image:imageUrl(input.image),color:/^#[0-9a-f]{6}$/i.test(input.color)?input.color:'#f2b4d0',manageStock:input.manageStock===true,stockQuantity:int(input.stockQuantity??0,0,1000000),salePriceMinor:input.salePriceMinor?int(input.salePriceMinor,1,input.priceMinor):null,
-   sourceIngredientText:text(input.sourceIngredientText,5000)||ingredients.map(item=>item.sourceLabel).join(', '),traceStatementOriginal:text(input.traceStatementOriginal,1500),sourceUrl:original.sourceUrl||'',sourceAttributeIngredientText:original.sourceAttributeIngredientText||'',sourceConflict:original.sourceConflict||false};
+   safetyStock:int(input.safetyStock??original.safetyStock??0,0,1000000),lowStockThreshold:int(input.lowStockThreshold??original.lowStockThreshold??5,0,1000000),sourceIngredientText:text(input.sourceIngredientText,5000)||ingredients.map(item=>item.sourceLabel).join(', '),traceStatementOriginal:text(input.traceStatementOriginal,1500),sourceUrl:original.sourceUrl||'',sourceAttributeIngredientText:original.sourceAttributeIngredientText||'',sourceConflict:original.sourceConflict||false};
+  Object.assign(data,productMedia(input,original));
  }else if(kind==='category'){
   const parentId=text(input.parentId,90);if(parentId&&(parentId===id||!store.catalogue.categories.some(item=>item.id===parentId&&item.status!=='archived')))fail(400,'Hibás szülőkategória.');
   let parent=parentId;const seen=new Set([id]);while(parent){if(seen.has(parent))fail(400,'Körkörös kategóriahierarchia.');seen.add(parent);parent=store.catalogue.categories.find(item=>item.id===parent)?.parentId||'';}
@@ -91,13 +94,14 @@ async function save(db,user,kind,data,isNew){
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
  const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE (?<>'product' OR NOT EXISTS(SELECT 1 FROM store_records WHERE kind='product' AND id<>? AND json_extract(payload_json,'$.sku')=?))
- ON CONFLICT(kind,id) DO UPDATE SET payload_json=excluded.payload_json,status=excluded.status,revision=excluded.revision,updated_at=excluded.updated_at WHERE store_records.revision=? RETURNING id`,kind,data.id,JSON.stringify(payload),status,crypto.randomUUID(),time(),time(),kind,data.id,data.sku||'',revision).first();
+ ON CONFLICT(kind,id) DO UPDATE SET payload_json=excluded.payload_json,status=excluded.status,revision=excluded.revision,updated_at=excluded.updated_at WHERE store_records.revision=?
+ AND (?<>'product' OR json_extract(store_records.payload_json,'$.sku')=? OR (NOT EXISTS(SELECT 1 FROM store_stock_reservations WHERE product_id=? AND expires_at>?) AND NOT EXISTS(SELECT 1 FROM store_stock_movements WHERE product_id=? AND smartbill_confirmed_at IS NULL))) RETURNING id`,kind,data.id,JSON.stringify(payload),status,crypto.randomUUID(),time(),time(),kind,data.id,data.sku||'',revision,kind,data.sku||'',data.id,Math.floor(Date.now()/1000),data.id).first();
  if(!updated)fail(409,'Az adat időközben megváltozott, vagy a SKU már használatban van. Frissítsd a listát.');
  await audit(db,user,isNew?'create':'update',kind,data.id);
 }
 async function overview(db,user,env){
  const [store,orders,customers,subscribers,auditRows]=await Promise.all([
-  loadStore(db,{admin:true}),
+  loadStore(db,{admin:true,env}),
   all(db,`SELECT o.*,${refundColumns()},c.email,c.full_name,c.phone,p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id ORDER BY o.created_at DESC LIMIT 200`),
   all(db,`SELECT c.id,c.email,c.full_name,c.phone,c.created_at,COUNT(o.id) AS order_count FROM customers c LEFT JOIN customer_orders o ON o.user_id=c.id GROUP BY c.id ORDER BY c.created_at DESC LIMIT 200`),
   all(db,'SELECT email,status,created_at,updated_at FROM newsletter_subscribers ORDER BY created_at DESC LIMIT 200'),
@@ -122,8 +126,10 @@ async function upload(request,{db,bucket,user}){
  const id=crypto.randomUUID(),prefix=id+'-opt'+(profile==='recipe'?'-r':''),filename=prefix+'.webp',url='/media/'+filename;
  for(const image of processed.files)await bucket.put('store-media/'+prefix+image.suffix+'.webp',image.bytes,{httpMetadata:{contentType:'image/webp',cacheControl:'public, max-age=31536000, immutable'}});
  const originalBytes=data.length,storedBytes=processed.files[0].bytes.length;
- await save(db,user,'media',{id,url,name:text(file.name,180)||filename,width:processed.files[0].width,height:processed.files[0].height,originalBytes,storedBytes,fit:processed.fit,profile,variants:processed.files.map(({suffix,width,height,bytes})=>({url:'/media/'+prefix+suffix+'.webp',width,height,bytes:bytes.length})),status:'published',revision:'new'},true);
- return json({saved:true,url,originalBytes,storedBytes,variants:processed.files.length},201);
+ const media={id,url,name:text(file.name,180)||filename,alt:text(form.get('alt'),300),title:text(form.get('title'),180),caption:text(form.get('caption'),500),width:processed.files[0].width,height:processed.files[0].height,originalBytes,storedBytes,fit:processed.fit,profile,variants:processed.files.map(({suffix,width,height,bytes})=>({url:'/media/'+prefix+suffix+'.webp',width,height,bytes:bytes.length})),status:'published',revision:'new'};
+ await save(db,user,'media',media,true);
+ const row=await q(db,"SELECT revision FROM store_records WHERE kind='media' AND id=?",id).first();
+ return json({saved:true,url,originalBytes,storedBytes,variants:processed.files.length,media:{...media,revision:row.revision}},201);
 }
 const csvCell=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';
 export async function handleAdminRequest(request,ctx){
@@ -157,6 +163,24 @@ export async function handleAdminRequest(request,ctx){
    if(request.method==='POST'&&parts.length===2&&parts[1]==='stock')return json(await smartbillStock(db,env,await body(request),ctx.fetcher));
    return json({error:'Nem található SmartBill-művelet.'},404);
   }
+  if(parts[0]==='inventory'){
+   if(request.method==='GET'&&parts.length===1)return json(await inventoryOverview(db,env));
+   if(request.method==='GET'&&parts.length===2&&parts[1]==='export'){
+    const data=await inventoryOverview(db,env),rows=[['Termék','SKU','Állapot','SmartBill (db)','Eladható (db)','Foglalt (db)','Egyeztetendő (db)','Utolsó ellenőrzés'],...data.products.map(p=>[p.name,p.sku,p.inventory.label,p.inventory.rawQuantity??'',p.availableQuantity??'',p.inventory.reserved??'',p.inventory.pending??'',p.inventory.checkedAt||''])];
+    return new Response('\ufeff'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n'),{headers:{...headers,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="spice-raktar.csv"'}});
+   }
+   if(request.method==='POST'&&parts.length===2&&parts[1]==='sync'){await body(request);await syncInventory(db,env,{fetcher:ctx.fetcher});return json(await inventoryOverview(db,env));}
+   if(request.method==='POST'&&parts.length===2&&parts[1]==='reconcile')return json(await reconcileStock(db,env,user,await body(request),ctx.fetcher));
+   if(request.method==='PUT'&&parts.length===2){
+    const input=await body(request),store=await loadStore(db,{admin:true,withInventory:false}),original=store.catalogue.products.find(p=>p.id===parts[1]);if(!original)fail(404,'Nincs ilyen termék.');
+    const sku=text(input.sku,80,true);if(/[\r\n\t]/.test(sku))fail(400,'Egy sorban add meg az SKU-t.');
+    if(store.catalogue.products.some(p=>p.id!==original.id&&p.sku===sku))fail(409,'Ez a SKU már használatban van.');
+    await assertMappingChange(db,original,sku);
+    await save(db,user,'product',{...original,sku,safetyStock:int(input.safetyStock,0,1000000),lowStockThreshold:int(input.lowStockThreshold,0,1000000),revision:input.revision},false);
+    return json({saved:true});
+   }
+   return json({error:'Nincs ilyen raktárművelet.'},404);
+  }
   if(request.method==='GET'&&!parts.length)return json(await overview(db,user,env));
   if(request.method==='GET'&&(['analytics','archive'].includes(parts[0])||parts[0]==='export'&&['orders','order-lines','archive'].includes(parts[1])))return await analyticsEndpoint(request,db,parts);
   if(request.method==='GET'&&parts[0]==='customers'&&parts.length===2){
@@ -170,7 +194,17 @@ export async function handleAdminRequest(request,ctx){
    const name=String(invoice.number).replace(/[^a-zA-Z0-9_-]/g,'_');
    return new Response(object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="szamla-${name}.pdf"`}});
   }
-  if(parts[0]==='media'&&request.method==='POST')return await upload(request,ctx);
+  if(parts[0]==='media'&&request.method==='POST'&&parts.length===1)return await upload(request,ctx);
+  if(parts[0]==='media'&&parts.length===2&&['PUT','DELETE'].includes(request.method)){
+   const input=await body(request),row=await q(db,"SELECT payload_json,status,revision FROM store_records WHERE kind='media' AND id=?",parts[1]).first();if(!row)fail(404,'A kép nem található.');
+   const media=JSON.parse(row.payload_json);
+   if(request.method==='DELETE'){
+    const store=await loadStore(db,{admin:true,withInventory:false});
+    if(store.catalogue.products.some(p=>p.image===media.url||p.thumbnailImage===media.url||p.images?.some(i=>i.url===media.url))||store.recipes.some(r=>r.image===media.url)||store.catalogue.categories.some(c=>c.image===media.url))fail(409,'A képet még használja egy termék, kategória vagy recept. Előbb ott távolítsd el.');
+   }
+   await save(db,user,'media',{...media,id:parts[1],alt:text(input.alt??media.alt,300),title:text(input.title??media.title,180),caption:text(input.caption??media.caption,500),status:request.method==='DELETE'?'archived':input.status==='published'?'published':row.status,revision:input.revision},false);
+   return json({saved:true});
+  }
   if(parts[0]==='orders'&&parts.length===1&&request.method==='POST'){
    const input=await body(request),email=text(input.email,254,true).toLowerCase();
    if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)||!/^[-a-f0-9]{36}$/.test(input.requestId||''))fail(400,'Érvényes e-mail-cím és kérésazonosító szükséges.');
@@ -205,13 +239,16 @@ export async function handleAdminRequest(request,ctx){
   }
   const kind=kinds[parts[0]];
   if(kind&&['POST','PUT','DELETE'].includes(request.method)&&parts.length<=2){
-   const input=await body(request),store=await loadStore(db,{admin:true});
+   const input=await body(request),store=await loadStore(db,{admin:true,withInventory:false});
    if(request.method==='POST'&&parts.length!==1)fail(400,'Hibás létrehozási útvonal.');
    if(request.method!=='POST'&&(parts.length!==2||input.id!==parts[1]))fail(400,'Az azonosító nem egyezik.');
    if(request.method==='DELETE')input.status='archived';
    const data=validate(kind,input,store);
+   const usesSmartbill=kind==='product'&&(await smartbillConfig(db,env)).stockSync;
+   if(usesSmartbill){const original=store.catalogue.products.find(p=>p.id===data.id);data.manageStock=original?.manageStock??true;data.stockQuantity=original?.stockQuantity??0;}
    if(kind==='product'&&store.catalogue.products.some(p=>p.id!==data.id&&p.sku===data.sku))fail(409,'Ez a cikkszám már használatban van.');
-   if(kind==='product'&&data.manageStock){const reserved=await q(db,'SELECT COALESCE(SUM(quantity),0) AS amount FROM store_stock_reservations WHERE product_id=? AND expires_at>?',data.id,Math.floor(Date.now()/1000)).first();if(data.stockQuantity<reserved.amount)fail(409,'A készlet nem lehet kisebb az aktív fizetésekhez lefoglalt mennyiségnél.');}
+   if(kind==='product')await assertMappingChange(db,store.catalogue.products.find(p=>p.id===data.id),data.sku);
+   if(kind==='product'&&!usesSmartbill&&data.manageStock){const reserved=await q(db,'SELECT COALESCE(SUM(quantity),0) AS amount FROM store_stock_reservations WHERE product_id=? AND expires_at>?',data.id,Math.floor(Date.now()/1000)).first();if(data.stockQuantity<reserved.amount)fail(409,'A készlet nem lehet kisebb az aktív fizetésekhez lefoglalt mennyiségnél.');}
    await save(db,user,kind,data,request.method==='POST');return json({saved:true,id:data.id},request.method==='POST'?201:200);
   }
   return json({error:'Nem található adminművelet.'},404);

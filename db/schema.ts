@@ -113,8 +113,19 @@ export const newsletterThrottle = sqliteTable('newsletter_throttle', {
   id:text('id').primaryKey(),attempts:integer('attempts').notNull().default(1),expiresAt:integer('expires_at').notNull()
 });
 export const stockMovements = sqliteTable('store_stock_movements', {
-  orderId:text('order_id').notNull(),productId:text('product_id').notNull(),quantity:integer('quantity').notNull(),createdAt:text('created_at').notNull()
+  orderId:text('order_id').notNull(),productId:text('product_id').notNull(),quantity:integer('quantity').notNull(),createdAt:text('created_at').notNull(),
+  sku:text('sku').notNull().default(''),smartbillConfirmedAt:text('smartbill_confirmed_at'),smartbillDocument:text('smartbill_document')
 },table=>[primaryKey({columns:[table.orderId,table.productId]})]);
+export const smartbillStock=sqliteTable('store_smartbill_stock',{
+ productId:text('product_id').primaryKey(),sku:text('sku').notNull(),sourceKey:text('source_key').notNull(),
+ quantity:integer('quantity'),unit:text('unit').notNull(),status:text('status').notNull(),generation:text('generation').notNull(),
+ checkedAt:text('checked_at').notNull(),stockDate:text('stock_date').notNull()
+});
+export const inventorySync=sqliteTable('store_inventory_sync',{
+ id:text('id').primaryKey(),leaseToken:text('lease_token'),leaseUntil:integer('lease_until').notNull().default(0),
+ nextAttemptAt:integer('next_attempt_at').notNull().default(0),lastAttemptAt:text('last_attempt_at'),lastSuccessAt:text('last_success_at'),
+ generation:text('generation'),sourceKey:text('source_key'),status:text('status').notNull().default('pending'),error:text('error')
+});
 export const stockReservations = sqliteTable('store_stock_reservations', {
   checkoutId:text('checkout_id').notNull(),productId:text('product_id').notNull(),quantity:integer('quantity').notNull(),expiresAt:integer('expires_at').notNull()
 },table=>[primaryKey({columns:[table.checkoutId,table.productId]})]);

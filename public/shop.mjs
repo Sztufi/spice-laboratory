@@ -304,6 +304,20 @@ if(pageCategory&&$('#reset-empty'))$('#reset-empty').textContent='Kategória ös
 renderCatalogue(false);
 renderCartBadge();
 
+let stockRefreshBusy=false;
+async function refreshStock(){
+ if(document.hidden||stockRefreshBusy)return;stockRefreshBusy=true;
+ try{
+  const response=await fetch('/api/commerce/stock',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(16000)});if(!response.ok)return;
+  const data=await response.json();if(!data.enabled)return;let changed=false;
+  for(const row of data.products||[]){const product=productsById.get(row.id);if(product&&typeof row.inStock==='boolean'){if(product.inStock!==row.inStock)changed=true;product.inStock=row.inStock;product.stockStatus=row.stockStatus;}}
+  if(changed){renderCatalogue(false);for(const button of document.querySelectorAll('[data-action="add"]')){const product=productsById.get(button.dataset.id);if(!product)continue;button.disabled=product.inStock===false;button.innerHTML=product.inStock===false?'NEM ELÉRHETŐ':'KOSÁRBA '+icon('cart');}window.dispatchEvent(new Event('spice:stock-change'));}
+ }catch{/* The server independently checks stock again before live checkout. */}finally{stockRefreshBusy=false;}
+}
+const stockTimer=setInterval(refreshStock,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshStock();});
+window.addEventListener('pagehide',()=>clearInterval(stockTimer),{once:true});
+
 window.addEventListener('spice:commerce-ready',()=>{if(cartView==='checkout')showCheckout();});
 window.addEventListener('spice:favorites-change', () => renderCatalogue(false));
 window.addEventListener('spice:open-dialog', event => openDialog(event.detail));

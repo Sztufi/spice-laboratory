@@ -4,6 +4,7 @@ import { catalogue } from './catalogue.mjs';
 import {purchaseQuantity,purchaseCost} from './product-purchase.mjs';
 import {formatMoney} from './money.mjs';
 import {mountScrollMarquee} from './scroll-marquee.mjs';
+import {mountProductGallery} from './product-gallery.mjs';
 for(const band of document.querySelectorAll('[data-scroll-marquee]'))mountScrollMarquee(band);
 function paintFavorites(){
  for(const button of document.querySelectorAll('[data-favorite]')){
@@ -31,6 +32,7 @@ document.querySelector('[data-toggle-motion]')?.addEventListener('click',event=>
 // A single quantity source powers both purchase buttons. No external CRO scripts.
 const quantityInput=document.querySelector('#product-quantity');
 const product=catalogue.products.find(p=>p.id===document.querySelector('[data-product-id]')?.dataset.productId);
+mountProductGallery(document.querySelector('[data-product-gallery]'),product,document.querySelector('#product-image-dialog'));
 if(quantityInput&&product){
  const methods=JSON.parse(document.querySelector('#purchase-shipping-methods')?.textContent||'[]');
  function refreshPurchase(){
@@ -42,6 +44,7 @@ if(quantityInput&&product){
   document.querySelector('[data-purchase-shipping]').innerHTML=styleIcons(purchaseCost(product,methods,quantity));
  }
  quantityInput.addEventListener('change',refreshPurchase);
+ window.addEventListener('spice:stock-change',()=>{quantityInput.disabled=product.inStock===false;refreshPurchase();});
  document.addEventListener('click',event=>{
   const step=event.target.closest('[data-quantity-step]');
   if(step&&!step.disabled){quantityInput.value=String(purchaseQuantity(quantityInput.value)+Number(step.dataset.quantityStep));refreshPurchase();}

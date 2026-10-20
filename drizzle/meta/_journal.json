@@ -64,6 +64,13 @@
       "when": 1792414940048,
       "tag": "0008_oval_sleepwalker",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792481322158,
+      "tag": "0009_thin_enchantress",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,10 @@
 import {query,loadStore,fail,text} from './store.mjs';
+import {resolveConfig} from './inventory-model.mjs';
 
 export async function smartbillConfig(db,env={}){
  const row=await query(db,"SELECT payload_json,revision FROM store_records WHERE kind='setting' AND id='smartbill' AND status='published'").first();
  const saved=row?JSON.parse(row.payload_json):{};
- return {email:saved.email??env.SMARTBILL_EMAIL??'',companyVatCode:saved.companyVatCode??env.SMARTBILL_COMPANY_VAT_CODE??'',seriesName:saved.seriesName??env.SMARTBILL_INVOICE_SERIES??'',warehouseName:saved.warehouseName??env.SMARTBILL_WAREHOUSE_NAME??'',revision:row?.revision||'new',tokenConfigured:!!env.SMARTBILL_API_TOKEN,v3TokenConfigured:!!env.SMARTBILL_V3_TOKEN,invoiceIssuing:false,stockSync:false};
+ return {...resolveConfig(saved,env),revision:row?.revision||'new'};
 }
 
 export function validateSmartbillSettings(input){
@@ -11,10 +12,11 @@ export function validateSmartbillSettings(input){
  if(!/^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~@-]+$/.test(email)||!/^\S+@[^@.]+(?:\.[^@.]+)+$/.test(email))fail(400,'Érvényes SmartBill-fiók e-mail-cím szükséges.');
  if(!/^(?:RO)?[0-9]{2,20}$/.test(companyVatCode)||/[\r\n\t]/.test(seriesName+warehouseName))fail(400,'Ellenőrizd a CIF, sorozat és raktár értékét.');
  if(['token','apiKey','apiToken','password'].some(key=>key in input))fail(400,'Az API-token kizárólag titkos szerverbeállításban tárolható.');
- return {email,companyVatCode,seriesName,warehouseName};
+ if('stockSyncEnabled' in input&&typeof input.stockSyncEnabled!=='boolean')fail(400,'Hibás készletszinkron-beállítás.');
+ return {email,companyVatCode,seriesName,warehouseName,...('stockSyncEnabled' in input?{stockSyncEnabled:input.stockSyncEnabled}:{})};
 }
 
-async function providerGet(config,env,path,params,fetcher=fetch){
+export async function providerGet(config,env,path,params,fetcher=fetch){
  if(!config.tokenConfigured||!config.email||!config.companyVatCode)fail(503,'Hiányzik a SmartBill V1-token, a fiók e-mail-címe vagy a CIF.');
  if(env.SMARTBILL_API_TOKEN.startsWith('sb_live_'))fail(400,'A számlázási V1-kapcsolathoz a SmartBill API v1 szakaszában található token szükséges.');
  const url=new URL('https://ws.smartbill.ro/SBORO/api/'+path);url.searchParams.set('cif',config.companyVatCode);

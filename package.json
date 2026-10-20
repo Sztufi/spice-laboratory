@@ -3,8 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "imports": {
-    "#webp-encoder": {"workerd":"./server/webp-worker.mjs","node":"./server/webp-node.mjs","default":"./server/webp-worker.mjs"},
-    "#photon": {"workerd":"@cf-wasm/photon/workerd","node":"@cf-wasm/photon/node","default":"@cf-wasm/photon/workerd"}
+    "#webp-encoder": {
+      "workerd": "./server/webp-worker.mjs",
+      "node": "./server/webp-node.mjs",
+      "default": "./server/webp-worker.mjs"
+    },
+    "#photon": {
+      "workerd": "@cf-wasm/photon/workerd",
+      "node": "@cf-wasm/photon/node",
+      "default": "@cf-wasm/photon/workerd"
+    }
   },
   "engines": {
     "node": ">=22.13.0"
@@ -12,7 +20,7 @@
   "scripts": {
     "install:ci": "node scripts/install-ci.mjs",
     "dev": "node scripts/run-framework.mjs dev",
-    "build": "node scripts/optimize-images.mjs && node scripts/run-framework.mjs build",
+    "build": "node scripts/build-upload-vendor.mjs && node scripts/optimize-images.mjs && node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
@@ -45,7 +53,14 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
     "vaul": "^1.1.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "filepond": "4.32.12",
+    "filepond-plugin-image-transform": "3.8.8",
+    "filepond-plugin-image-resize": "2.0.10",
+    "filepond-plugin-image-preview": "4.6.12",
+    "filepond-plugin-image-exif-orientation": "1.0.11",
+    "filepond-plugin-file-validate-size": "2.2.8",
+    "filepond-plugin-file-validate-type": "1.2.9"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

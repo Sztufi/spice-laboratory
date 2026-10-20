@@ -3,7 +3,7 @@ import {styleIcons} from './brand-icons.mjs';
 import {mountWithdrawals} from './admin-withdrawals.mjs';
 import {analyticsPanel,archivePanel,mountReports} from './admin-analytics.mjs';
 import {seoPanel,mountSeoPanel,seoFields,seoInput,mountSeoPreview} from './admin-seo.mjs';
-import {prepareImage} from './image-upload.mjs';
+import {mountFileUploader} from './file-uploader.mjs';
 import {mountSmartbill} from './admin-smartbill.mjs';
 import {mountOmnisend} from './admin-omnisend.mjs';
 import {mountInventory} from './admin-inventory.mjs';
@@ -19,7 +19,7 @@ const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',a
 const kindNames={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon'};
 const stateLabels={'pending-payment':'Fizetésre vár',published:'Közzétéve',draft:'Piszkozat',archived:'Archiválva',paid:'Fizetve','demo-completed':'Próbavásárlás',processing:'Feldolgozás',packing:'Csomagolás',shipped:'Feladva',completed:'Teljesítve','on-hold':'Várakozik',cancelled:'Törölve',synced:'Omnisend visszaigazolta',failed:'Szinkronhiba',pending:'Függőben'};
 let data=null,tab=new URLSearchParams(location.search).get('tab')||'dashboard',editing=null;
-let productMediaEditor=null;
+let productMediaEditor=null,recipeUploader=null;
 if(!labels[tab])tab='dashboard';
 const adminIcons={dashboard:'grid',analytics:'grid',archive:'receipt',withdrawals:'receipt',products:'jar',inventory:'box',categories:'grid',ingredients:'jar',orders:'box',customers:'profile',coupons:'receipt',recipes:'book',seo:'search',media:'eye',newsletter:'mail',omnisend:'mail',smartbill:'receipt',settings:'settings'};
 function pill(status){return `<span class="pill ${['published','paid','completed','synced'].includes(status)?'good':['archived','failed','cancelled'].includes(status)?'bad':'pink'}">${h(stateLabels[status]||status||'—')}</span>`;}
@@ -47,7 +47,7 @@ const field=(name,label,value='',type='text',attrs='')=>`<label class="field" fo
 const area=(name,label,value='',attrs='')=>`<label class="field" for="edit-${name}">${h(label)}<textarea id="edit-${name}" name="${name}" ${attrs}>${h(value)}</textarea></label>`;
 const select=(name,label,options,value)=>`<label class="field" for="edit-${name}">${h(label)}<select id="edit-${name}" name="${name}">${options.map(([id,title])=>`<option value="${h(id)}"${id===value?' selected':''}>${h(title)}</option>`).join('')}</select></label>`;
 const checks=(name,title,items,selected)=>`<fieldset><legend>${h(title)}</legend><div class="check-list">${items.filter(i=>i.status!=='archived'||selected.includes(i.id)).map(i=>`<label><input name="${name}" type="checkbox" value="${h(i.id)}"${selected.includes(i.id)?' checked':''}>${h(i.label||i.name)}</label>`).join('')}</div></fieldset>`;
-const imageFields=(value='')=>`<div class="image-field"><img id="edit-image-preview" src="${h(value||'/assets/mascot.png')}" alt="Kép előnézete"><div class="image-controls">${field('image','Kép webcíme (feltöltéskor kitöltjük)',value,'text','maxlength="600"')}<label class="check-field" for="editor-image-file">Új kép feltöltése</label><input id="editor-image-file" type="file" accept="image/jpeg,image/png,image/webp"><small>Maximum 25 MB · automatikus WebP és 4 képméret</small>${select('imageFit','Automatikus képkivágás',[['contain','Teljes kép megtartása'],['cover','Középre vágás a képhelyhez']],'contain')}</div></div>`;
+const imageFields=(value='')=>`<div class="image-field"><img id="edit-image-preview" src="${h(value||'/assets/mascot.png')}" alt="Kép előnézete"><div class="image-controls">${field('image','Kép webcíme (feltöltéskor kitöltjük)',value,'text','maxlength="600"')}<div id="recipe-image-uploader"></div><small>Maximum 25 MB · automatikus WebP és 4 képméret</small>${select('imageFit','Automatikus képkivágás',[['contain','Teljes kép megtartása'],['cover','Középre vágás a képhelyhez']],'contain')}</div></div>`;
 function shippingRow(method={}){const id='ship-'+crypto.randomUUID();return `<fieldset class="shipping-row" data-shipping-row><legend>${h(method.label||'Új szállítási mód')}</legend><div class="form-two"><label for="${id}-label">Megnevezés<input id="${id}-label" name="label" value="${h(method.label||'')}" required maxlength="80"></label><label for="${id}-id">Azonosító<input id="${id}-id" name="id" value="${h(method.id||'')}" required pattern="[a-z0-9-]{1,50}" maxlength="50"></label></div><div class="form-two"><label for="${id}-country">Ország<select id="${id}-country" name="country"><option value="HU"${method.country==='RO'?'':' selected'}>Magyarország</option><option value="RO"${method.country==='RO'?' selected':''}>Románia</option></select></label><label for="${id}-fee">Szállítási díj (Ft)<input id="${id}-fee" name="fee" type="number" min="0" step="1" required value="${method.feeMinor===undefined?'':method.feeMinor/100}"></label></div><div class="form-two"><label for="${id}-min">Minimum munkanap<input id="${id}-min" name="min" type="number" min="1" max="60" required value="${method.deliveryMinDays||''}"></label><label for="${id}-max">Maximum munkanap<input id="${id}-max" name="max" type="number" min="1" max="60" required value="${method.deliveryMaxDays||''}"></label></div><label for="${id}-free">Díjmentes e termékösszeg felett (Ft, opcionális)<input id="${id}-free" name="free" type="number" min="0" step="1" value="${method.freeAboveMinor===undefined?'':method.freeAboveMinor/100}"></label><button class="button danger" type="button" data-remove-shipping>Eltávolítás</button></fieldset>`;}
 function settings(){return `<div class="admin-two"><section class="admin-card"><h2>FIZETÉS ÉS MARKETING</h2><div class="status-line"><span>Stripe · ${data.config.mode==='test'?'tesztmód':'éles mód'}</span>${pill(data.config.stripeEnabled?'published':'pending')}</div><div class="status-line"><span>Omnisend</span>${pill(data.config.newsletterEnabled?'published':'pending')}</div><p>A szolgáltatói kulcsokat a biztonságos tárhelybeállításokban kell megadni. Az adminfelület nem jeleníti meg és nem írja felül őket.</p><p>A számlakibocsátó és az automatikus adószámítás még nincs bekötve. A termékárakat a megadott HUF-árként kezeljük.</p></section><section class="admin-card"><h2>HOZZÁFÉRÉS</h2><p>${h(data.user.email)}</p><p>A tulajdonosi jogosultságot szerveroldali engedélylista védi. Egy vásárlói fiók önmagában nem ad adminhozzáférést.</p>${data.user.provider==='google'?'<button type="button" class="button light" data-admin-google-logout>Kijelentkezés a Google-fiókból</button>':'<a href="/signout-with-chatgpt?return_to=%2F" target="_top" class="button light">Kijelentkezés</a>'}</section></div><section class="admin-card"><h2>SZÁLLÍTÁS</h2><p>A díjak Ft-ban adhatók meg. Ha nincs beállított szállítási mód, a valódi pénztár nem indul el.</p><form id="shipping-form" class="editor-form settings-form"><div id="shipping-rows">${data.config.shippingMethods.map(shippingRow).join('')}</div><div class="row-actions">${button('SZÁLLÍTÁSI MÓD +','id="add-shipping"')}<button class="button yellow" type="submit">SZÁLLÍTÁS MENTÉSE</button></div><p class="editor-error" id="shipping-error" role="alert" hidden></p></form></section><section class="admin-card"><h2>TÁJÉKOZTATÓK ÉS ÉLESÍTÉS</h2><p><a href="/aszf" target="_blank">ÁSZF</a> · <a href="/adatkezeles" target="_blank">Adatkezelés</a> · <a href="/visszakuldes" target="_blank">Elállás</a></p><p>Visszaküldés: a cég székhelyére, tulajdonosi megerősítés alapján. Élesítés előtt ellenőrizendő: aktuális cégadatok és irányítószám; futár és díjak; számlázó/könyvelő; adatfeldolgozók szerződő jogi személyei, feltételei és adattovábbítási garanciái; rendelési visszaigazoló levél és feltétel-pillanatkép; megőrzési/törlési ütemezés. A lezárt ellenőrzést a LEGAL_LAUNCH_APPROVED beállítás jelzi. Az elállási elismervényhez RESEND_API_KEY és ellenőrzött TRANSACTIONAL_EMAIL_FROM szükséges. Ezek nélkül az éles fizetés tiltott.</p></section><section class="admin-card"><h2>LEGUTÓBBI MÓDOSÍTÁSOK</h2>${table(['Művelet','Adattípus / azonosító','Dátum'],data.audit.map(a=>`<tr><td>${h(a.action)}</td><td>${h(a.entity)} · ${h(a.entity_id)}</td><td>${date(a.created_at)}</td></tr>`))}</section>`;}
 function render(){
@@ -65,7 +65,7 @@ function render(){
 }
 async function refresh(){data=await api();render();}
 function openEditor(kind,record,duplicate=false){
- productMediaEditor?.dispose();productMediaEditor=null;
+ productMediaEditor?.dispose();productMediaEditor=null;recipeUploader?.dispose();recipeUploader=null;
  const original=record?structuredClone(record):{};if(duplicate){original.id='';original.name+=' – másolat';original.sku='';original.status='draft';original.revision='new';}
  editing={kind,original,isNew:!record||duplicate};
  const status=original.status||'draft',statusField=select('status','Állapot',Object.entries(stateLabels).filter(([key])=>['draft','published','archived'].includes(key)),status);
@@ -81,6 +81,7 @@ function openEditor(kind,record,duplicate=false){
  $('#admin-editor').showModal();
  if(kind==='products'&&original.stockSource==='smartbill'){const stock=$('#edit-stock');if(stock)stock.disabled=true;const check=$('#record-form [name=manageStock]');if(check)check.disabled=true;}
  if(kind==='products')productMediaEditor=mountProductMedia($('#product-media-root'),{product:original,media:data.media,api});
+ if(kind==='recipes')recipeUploader=mountFileUploader($('#recipe-image-uploader'),{multiple:false,limit:1,profile:()=> 'recipe',fit:()=>$('#edit-imageFit')?.value||'contain',onUploaded:item=>{$('#edit-image').value=item.url;$('#edit-image-preview').src=item.url;data.media.push(item);},onError:editorError});
  mountSeoPreview($('#editor-content'),{title:original.name||original.title||original.label,description:original.description||original.excerpt});
 }
 function recordInput(form){
@@ -97,7 +98,7 @@ function recordInput(form){
 }
 function editorError(message){const node=$('#editor-error');if(node){node.hidden=false;node.textContent=message;}else notice(message,true);}
 async function saveRecord(form,archive=false){
- if(productMediaEditor?.busy){editorError('Várd meg a képek feltöltésének befejezését.');return;}
+ if(productMediaEditor?.busy||recipeUploader?.busy){editorError('Várd meg a képek feltöltésének befejezését.');return;}
  const input=recordInput(form),{kind,isNew}=editing,submit=form.querySelector('button[type=submit]');submit.disabled=true;
  try{await api('/'+kind+(isNew?'':'/'+encodeURIComponent(input.id)),archive?'DELETE':isNew?'POST':'PUT',input);$('#admin-editor').close();await refresh();notice(archive?'Archiválva. A korábbi rendelések adatai megmaradtak.':'Mentve. A közzétett tartalom a webshopban is frissült.');}
  catch(error){editorError(error.message);}finally{submit.disabled=false;}
@@ -118,12 +119,6 @@ async function openOrder(id){
 async function showCustomer(id){
  const customer=await api('/customers/'+encodeURIComponent(id));$('#editor-title').textContent=customer.profile.full_name||'VÁSÁRLÓ';
  $('#editor-content').innerHTML=styleIcons(`<div class="customer-detail"><p><strong>${h(customer.profile.email)}</strong><br>${h(customer.profile.phone)}</p><h3>Címek</h3>${customer.addresses.map(a=>`<p><strong>${a.kind==='shipping'?'Szállítás':'Számlázás'}</strong><br>${[a.recipient,a.company,a.tax_id,a.postal_code,a.city,a.line1,a.line2,a.country].filter(Boolean).map(h).join('<br>')}</p>`).join('')||'<p>Nincs mentett cím.</p>'}<h3>Rendelések</h3>${orderTable(data.orders.filter(o=>o.user_id===id))}<h3>Számlák</h3>${customer.invoices.map(i=>`<p><a href="/api/admin/invoices/${encodeURIComponent(i.id)}/download">${h(i.number)} · PDF ↓</a></p>`).join('')||'<p>Nincs kiállított számla.</p>'}</div>`);$('#admin-editor').showModal();
-}
-async function uploadFile(file,target){
- if(!file)return;
- const optimized=await prepareImage(file);
- const form=new FormData();form.append('file',optimized);form.append('fit',$('#edit-imageFit')?.value||'contain');form.append('profile',target&&editing?.kind==='recipes'?'recipe':'product');const result=await api('/media','POST',form);
- if(target){target.value=result.url;$('#edit-image-preview').src=result.url;data.media.push({url:result.url,name:file.name});}else{await refresh();notice('A kép feltöltve.');}
 }
 document.addEventListener('click',async event=>{
  try{
@@ -150,10 +145,6 @@ document.addEventListener('input',event=>{
  if(event.target.id==='edit-id')event.target.dataset.edited='true';
  if(event.target.id==='edit-image')$('#edit-image-preview').src=event.target.value||'/assets/mascot.png';
 });
-document.addEventListener('change',async event=>{
- if(!['editor-image-file','media-file'].includes(event.target.id))return;
- try{event.target.disabled=true;await uploadFile(event.target.files[0],event.target.id==='editor-image-file'?$('#edit-image'):null);}catch(error){editorError(error.message);}finally{event.target.disabled=false;}
-});
 document.addEventListener('submit',async event=>{
  if(!['record-form','order-form','shipping-form','manual-order-form'].includes(event.target.id))return;
  event.preventDefault();const form=event.target;
@@ -174,4 +165,4 @@ document.addEventListener('submit',async event=>{
 });
 try{await refresh();}catch(error){$('#admin-panel').innerHTML=styleIcons(`<section class="admin-card"><h2>NEM ÉRHETŐ EL AZ ADMIN.</h2><p>${h(error.message)}</p>${error.status===401?'<a class="button" target="_top" href="/fiok?next=%2Fadmin">Belépés az adminfiókkal ↗</a>':'<a class="button light" href="/admin">Újrapróbálás</a>'}</section>`);}
 
-$('#admin-editor').addEventListener('close',()=>{productMediaEditor?.dispose();productMediaEditor=null;});
+$('#admin-editor').addEventListener('close',()=>{productMediaEditor?.dispose();productMediaEditor=null;recipeUploader?.dispose();recipeUploader=null;});

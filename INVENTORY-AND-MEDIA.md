@@ -44,7 +44,13 @@ catalogue-thumbnail selections, product-specific alt/title/caption, multi-upload
 and a searchable, paged library picker. Selecting or removing a gallery image
 does not delete its library asset. Save the product to publish gallery changes.
 
-Uploads keep the current WebP pipeline (master plus 160/320/640/960 variants).
+Uploads use self-hosted FilePond with its official validation, preview, EXIF,
+resize and transform plugins. FilePond provides progress, cancellation and retry.
+The browser prepares a maximum 1280×1280 PNG, preserving transparency without
+requiring Safari to encode WebP. The server accepts one prepared image up to
+7 MiB, then generates WebP (master plus 160/320/640/960 variants).
+The native Workers upload test exercises real D1/R2 and both WASM image codecs,
+including FilePond metadata and binary sharing the same multipart field.
 Contain preserves the image; cover center-crops size variants. The master remains
 uncropped and is used for zoom. No arbitrary server-side image URL fetch exists.
 

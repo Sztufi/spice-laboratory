@@ -112,10 +112,12 @@ async function overview(db,user,env){
 }
 async function upload(request,{db,bucket,user}){
  if(!bucket)fail(503,'A képtár nem érhető el.');
- const bytes=await limited(request,6*1024*1024),type=request.headers.get('content-type')||'';
+ const bytes=await limited(request,8*1024*1024),type=request.headers.get('content-type')||'';
  if(!type.startsWith('multipart/form-data'))fail(415,'Képfájl feltöltése szükséges.');
- const form=await new Response(bytes,{headers:{'Content-Type':type}}).formData(),file=form.get('file');
- if(!file||typeof file.arrayBuffer!=='function'||file.size>5*1024*1024)fail(400,'Legfeljebb 5 MB-os képet tölts fel.');
+ const form=await new Response(bytes,{headers:{'Content-Type':type}}).formData();
+ // FilePond sends its metadata JSON and the binary file under the same name.
+ const files=form.getAll('file').filter(item=>typeof item?.arrayBuffer==='function'),file=files[0];
+ if(files.length!==1||file.size>7*1024*1024)fail(400,'Egy legfeljebb 7 MB-os, előkészített képfájl szükséges.');
  const data=new Uint8Array(await file.arrayBuffer());let extension,mime;
  if(data.length>12&&data[0]===137&&data[1]===80&&data[2]===78&&data[3]===71){extension='png';mime='image/png';}
  else if(data.length>3&&data[0]===255&&data[1]===216&&data[2]===255){extension='jpg';mime='image/jpeg';}

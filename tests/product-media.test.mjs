@@ -7,11 +7,33 @@ import {loadStore} from '../server/store.mjs';
 import {productMedia} from '../server/product-media.mjs';
 import {productExperience} from '../server/product-experience.mjs';
 import {productCard} from '../public/product-markup.mjs';
+import {runInNewContext} from 'node:vm';
 const owner={userId:'owner',email:'owner@example.com'},env={ADMIN_EMAILS:owner.email};
 function database(){const sqlite=new DatabaseSync(':memory:');for(const f of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+f,import.meta.url),'utf8'));return {sqlite,db:{prepare(sql){return {bind(...args){return {async run(){return sqlite.prepare(sql).run(...args);},async first(){return sqlite.prepare(sql).get(...args)||null;},async all(){return {results:sqlite.prepare(sql).all(...args)};}};}};}}};}
 const images=[{id:'front',url:'/assets/front.webp',alt:'Elölnézet „üveg”',title:'Elöl',caption:'210 g-os üveg'},{id:'detail',url:'/assets/detail.webp',alt:'Részlet & textúra',title:'Részlet',caption:'<script>alert(1)</script>'},{id:'back',url:'/assets/back.webp',alt:'Hátoldali összetevők'}];
 const product={id:'gallery-product',sku:'GALLERY-01',name:'Galériás fűszer',priceMinor:275000,weightGrams:210,categories:['bbq'],ingredientIds:['garlic'],status:'published',images,featuredImageId:'detail',thumbnailImageId:'back'};
 const request=(path,method='GET',body,origin='https://spice.test')=>new Request('https://spice.test/api/admin'+path,{method,headers:{Origin:origin,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+test('admin submit with a named id field prevents navigation and persists changed main and thumbnail images',async()=>{
+ const {db}=database(),call=(path,method,body)=>handleAdminRequest(request(path,method,body),{db,user:owner,env});
+ assert.equal((await call('/products','POST',product)).status,201);
+ const original=(await loadStore(db,{admin:true})).catalogue.products.find(p=>p.id===product.id);
+ const replacement={...original,images:[images[0]],featuredImageId:'front',thumbnailImageId:'front'};
+ const source=readFileSync(new URL('../public/admin.mjs',import.meta.url),'utf8');
+ const save=source.slice(source.indexOf('async function saveRecord('),source.indexOf('\nfunction openManualOrder('));
+ const submit=source.slice(source.indexOf("document.addEventListener('submit',"),source.indexOf('\ntry{\n await refresh();'));
+ let listener,prevented=false,closed=false,refreshed=false,message='',calls=0;
+ const button={disabled:false};
+ // HTMLFormElement named properties expose input[name=id] instead of form.id.
+ const form={id:{name:'id',value:original.id},getAttribute:name=>name==='id'?'record-form':null,querySelector:()=>button};
+ const context={document:{addEventListener:(event,handler)=>{listener=handler;}},productMediaEditor:{busy:false},recipeUploader:null,recordInput:()=>replacement,editing:{kind:'products',isNew:false},$:()=>({close:()=>{closed=true;}}),refresh:async()=>{refreshed=true;},notice:value=>{message=value;},editorError:value=>assert.fail(value),api:async(path,method,body)=>{calls++;const response=await call(path,method,body);assert.equal(response.status,200);return response.json();}};
+ runInNewContext(save+'\n'+submit,context);
+ await listener({target:form,preventDefault:()=>{prevented=true;}});
+ assert.equal(prevented,true,'must stop native GET submission');assert.equal(calls,1);assert.equal(closed,true);assert.equal(refreshed,true);assert.match(message,/Mentve/);assert.equal(button.disabled,false);
+ const saved=(await loadStore(db)).catalogue.products.find(p=>p.id===product.id);
+ assert.equal(saved.image,'/assets/front.webp');assert.equal(saved.thumbnailImage,'/assets/front.webp');
+ assert.match(productExperience(saved,{label:'BBQ'},{stripeEnabled:false,shippingMethods:[]}),/src="\/assets\/front.webp"/);
+ assert.match(productCard({...saved,ingredients:[]}),/src="\/assets\/front.webp"/);
+});
 test('gallery saves ordered images and independent main/thumbnail roles; alt/captions escape in catalogue and product page',async()=>{
  const {db}=database(),call=(path,method,body)=>handleAdminRequest(request(path,method,body),{db,user:owner,env});
  assert.equal((await call('/products','POST',product)).status,201);

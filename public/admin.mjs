@@ -146,22 +146,24 @@ document.addEventListener('input',event=>{
  if(event.target.id==='edit-image')$('#edit-image-preview').src=event.target.value||'/assets/mascot.png';
 });
 document.addEventListener('submit',async event=>{
- if(!['record-form','order-form','shipping-form','manual-order-form'].includes(event.target.id))return;
- event.preventDefault();const form=event.target;
- if(form.id==='record-form'){await saveRecord(form);return;}
+ // Named controls (notably input[name=id]) shadow HTMLFormElement properties.
+ const form=event.target,formId=form.getAttribute('id');
+ if(!['record-form','order-form','shipping-form','manual-order-form'].includes(formId))return;
+ event.preventDefault();
+ if(formId==='record-form'){await saveRecord(form);return;}
  const submit=form.querySelector('button[type=submit]');submit.disabled=true;
  try{
-  if(form.id==='manual-order-form'){
+  if(formId==='manual-order-form'){
    const values=new FormData(form),method=data.config.shippingMethods.find(m=>m.id===values.get('shippingMethodId'));
    const items=values.getAll('manualProduct').map(id=>({id,quantity:Number(values.get('quantity-'+id))}));
    await api('/orders','POST',{requestId:editing.requestId,email:values.get('email'),fullName:values.get('fullName'),note:values.get('note'),items,country:method?.country||'HU',shippingMethodId:method?.id||''});$('#admin-editor').close();
-  }else if(form.id==='order-form'){const values=new FormData(form);await api('/orders/'+encodeURIComponent(editing.original.id),'PUT',{fulfillmentStatus:values.get('fulfillmentStatus'),trackingUrl:values.get('trackingUrl'),note:values.get('note'),revision:editing.original.operation_revision||'new'});$('#admin-editor').close();}
+  }else if(formId==='order-form'){const values=new FormData(form);await api('/orders/'+encodeURIComponent(editing.original.id),'PUT',{fulfillmentStatus:values.get('fulfillmentStatus'),trackingUrl:values.get('trackingUrl'),note:values.get('note'),revision:editing.original.operation_revision||'new'});$('#admin-editor').close();}
   else{
    const methods=[...form.querySelectorAll('[data-shipping-row]')].map(row=>{const value=name=>row.querySelector(`[name="${name}"]`).value;return {id:value('id'),label:value('label'),country:value('country'),feeMinor:Math.round(Number(value('fee'))*100),deliveryMinDays:Number(value('min')),deliveryMaxDays:Number(value('max')),...(value('free')!==''?{freeAboveMinor:Math.round(Number(value('free'))*100)}:{})};});
    const previous=data.settings.find(s=>s.id==='shipping');await api('/settings/shipping','PUT',{id:'shipping',status:'published',revision:previous?.revision||'new',methods});
   }
   await refresh();notice('A módosításokat elmentettük.');
- }catch(error){if(form.id==='shipping-form'){const node=$('#shipping-error');node.hidden=false;node.textContent=error.message;}else editorError(error.message);}finally{submit.disabled=false;}
+ }catch(error){if(formId==='shipping-form'){const node=$('#shipping-error');node.hidden=false;node.textContent=error.message;}else editorError(error.message);}finally{submit.disabled=false;}
 });
 try{
  await refresh();

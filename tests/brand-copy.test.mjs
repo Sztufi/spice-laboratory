@@ -34,7 +34,8 @@ test('commerce state stays honest in independent copy and merchant edits are not
  const product={...seedCatalogue.products[0],description:'A kereskedő által frissített termékleírás.'};
  const catalogue={...seedCatalogue,products:[product,...seedCatalogue.products.slice(1)]};
  const {html}=renderSitePage(base,{pathname:'/termek/'+product.id,catalogue});
- assert.ok(html.includes(product.description));assert.ok(html.includes('valódi rendelést és fizetést nem fogadunk'));
+ assert.ok(html.includes(product.description));assert.ok(!html.includes('data-purchase-shipping'));
+ assert.ok(!html.includes('valódi rendelést és fizetést nem fogadunk'));
  const legal=renderSitePage(base,{pathname:'/aszf'}).html;
  assert.ok(legal.includes('14 naptári nap'));
  assert.ok(legal.includes('SPICE LABORATORY S.R.L.'));

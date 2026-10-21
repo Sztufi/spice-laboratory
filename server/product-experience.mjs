@@ -1,6 +1,6 @@
 import {escapeHtml as h,defaultFavorite} from '../public/product-markup.mjs';
 import {formatMoney} from '../public/money.mjs';
-import {unitPrice,purchaseCost} from '../public/product-purchase.mjs';
+import {unitPrice} from '../public/product-purchase.mjs';
 import {brandIcon} from '../public/brand-icons.mjs';
 import {galleryMarkup} from './product-gallery.mjs';
 import {purchaseButton,soldOut} from '../public/stock-state.mjs';
@@ -17,9 +17,8 @@ export function productExperience(product,category,config){
  <p class="product-stock-message" data-product-stock-message${disabled?'':' hidden'}>${soldOut(product)?'Elfogyott. Kérj értesítést, és szólunk, amikor újra elérhető.':'A készlet ellenőrzés alatt. Kérj értesítést az elérhetőségről.'}</p>
  <div class="product-page-actions"><div class="pdp-quantity"${disabled?' hidden':''}><label for="product-quantity">Mennyiség</label><div><button type="button" data-quantity-step="-1" aria-label="Mennyiség csökkentése" disabled>−</button><input id="product-quantity" type="number" inputmode="numeric" min="1" max="99" step="1" value="1"${disabled?' disabled':''}><button type="button" data-quantity-step="1" aria-label="Mennyiség növelése"${disabled?' disabled':''}>+</button></div></div>${purchaseButton(product)}<div data-product-favorite>${defaultFavorite(product)}</div></div>
  <div class="purchase-links"><a href="#product-ingredients">Összetevők és allergének ↓</a><span>Fiók nélkül is menthetsz kedvencet.</span></div>
- <div class="shipping-overview" data-purchase-shipping>${purchaseCost(product,config.shippingMethods)}</div><div class="purchase-help-links"><a href="/szallitas-es-fizetes">Szállítás és fizetés</a><a href="/visszakuldes">Visszaküldés, reklamáció</a><a href="/kapcsolat">Kérdésed van?</a></div>
- ${!config.stripeEnabled?'<p class="store-preview"><strong>Előnézet.</strong> Csak próbavásárlás: valódi rendelést és fizetést nem fogadunk.</p>':config.mode==='test'?'<p class="store-preview"><strong>Stripe tesztmód.</strong> Nem történik valódi pénzmozgás.</p>':''}</div></div></article>
+ </div></div></article>
  <div class="mobile-product-buy" data-mobile-buy hidden><div><strong>${h(product.name)}</strong><span><span data-sticky-quantity>1</span> db · <span data-purchase-total>${money(product.priceMinor)}</span></span></div>${purchaseButton(product,{sticky:true})}</div>
  ${dialog}
- <script type="application/json" id="purchase-shipping-methods">${JSON.stringify(config.shippingMethods||[]).replace(/</g,'\\u003c')}</script>`;
+ `;
 }

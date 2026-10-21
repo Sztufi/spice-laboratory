@@ -1,7 +1,6 @@
-import {styleIcons} from './brand-icons.mjs';
 import { openAccount,favoriteButtonMarkup } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
-import {purchaseQuantity,purchaseCost} from './product-purchase.mjs';
+import {purchaseQuantity} from './product-purchase.mjs';
 import {formatMoney} from './money.mjs';
 import {mountScrollMarquee} from './scroll-marquee.mjs';
 import {mountProductGallery} from './product-gallery.mjs';
@@ -35,14 +34,12 @@ const quantityInput=document.querySelector('#product-quantity');
 const product=catalogue.products.find(p=>p.id===document.querySelector('[data-product-id]')?.dataset.productId);
 mountProductGallery(document.querySelector('[data-product-gallery]'),product,document.querySelector('#product-image-dialog'));
 if(quantityInput&&product){
- const methods=JSON.parse(document.querySelector('#purchase-shipping-methods')?.textContent||'[]');
  function refreshPurchase(){
   const quantity=purchaseQuantity(quantityInput.value);
   quantityInput.value=String(quantity);
   for(const node of document.querySelectorAll('[data-purchase-total]'))node.textContent=formatMoney(product.priceMinor*quantity,'HUF');
   for(const node of document.querySelectorAll('[data-sticky-quantity]'))node.textContent=String(quantity);
   for(const button of document.querySelectorAll('[data-quantity-step]'))button.disabled=product.inStock===false||(Number(button.dataset.quantityStep)<0?quantity<=1:quantity>=99);
-  const shipping=document.querySelector('[data-purchase-shipping]');shipping.hidden=product.inStock===false;shipping.innerHTML=styleIcons(purchaseCost(product,methods,quantity));
  }
  quantityInput.addEventListener('change',refreshPurchase);
  window.addEventListener('spice:stock-change',()=>{quantityInput.disabled=product.inStock===false;refreshPurchase();});

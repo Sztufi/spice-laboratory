@@ -3,9 +3,9 @@ import { formatMoney } from './money.mjs';
 import { shippingQuote, SHIPPING_COUNTRIES } from './shipping-core.mjs';
 const h=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=value=>formatMoney(value,'HUF');
-const selection={country:'HU',methodId:'',checkoutMode:'guest',couponCode:'',discountMinor:0,couponSubtotal:0};
+const selection={country:'HU',methodId:'',checkoutMode:'guest',couponCode:'',discountMinor:0,couponSubtotal:0,upsellProductId:''};
 let wasAuthenticated=false;
-export function checkoutSelection(config,subtotal){
+export function checkoutSelection(config,subtotal,upsellMinor=0){
  const authenticated=config.accountAvailable===true;
  if(authenticated)selection.checkoutMode='account';
  else if(wasAuthenticated)selection.checkoutMode='guest';
@@ -13,7 +13,12 @@ export function checkoutSelection(config,subtotal){
  if(selection.couponSubtotal!==subtotal){selection.couponCode='';selection.discountMinor=0;selection.couponSubtotal=subtotal;}
  const methods=(config.shippingMethods||[]).filter(item=>item.country===selection.country);
  if(!methods.some(item=>item.id===selection.methodId))selection.methodId=methods[0]?.id||'';
- return {...selection,quote:shippingQuote(methods,selection,subtotal-selection.discountMinor)};
+ return {...selection,quote:shippingQuote(methods,selection,subtotal-selection.discountMinor+upsellMinor)};
+}
+function availableUpsell(config,totals){
+ const upsell=config.upsell,ids=new Set(totals.lines.map(line=>line.id));
+ if(!upsell?.enabled||!upsell.product||totals.totalMinor<upsell.thresholdMinor||ids.has(upsell.productId)){selection.upsellProductId='';return null;}
+ return upsell;
 }
 export function shippingOverview(config,subtotal=0){
  const methods=(config.shippingMethods||[]).filter(item=>item.country==='HU');
@@ -24,14 +29,23 @@ export function shippingOverview(config,subtotal=0){
 }
 export function renderCheckout({totals,config,onPay,onAccount,onCoupon}){
  const content=document.querySelector('#cart-content'),footer=document.querySelector('#cart-footer');
- const state=checkoutSelection(config,totals.totalMinor),quote=state.quote;
+ const upsell=availableUpsell(config,totals),selectedUpsell=upsell&&selection.upsellProductId===upsell.productId?upsell:null;
+ const state=checkoutSelection(config,totals.totalMinor,selectedUpsell?.product.priceMinor||0),quote=state.quote;
+ const cartTotal=totals.totalMinor-state.discountMinor+(selectedUpsell?.product.priceMinor||0);
  const methods=(config.shippingMethods||[]).filter(item=>item.country===state.country);
  const demo=!config.stripeEnabled;
  document.querySelector('#cart-title').textContent=demo?'DEMÓ PÉNZTÁR':config.mode==='test'?'STRIPE TESZTFIZETÉS':'PÉNZTÁR';
  content.innerHTML=styleIcons(`<button class="checkout-back" type="button" data-action="back-cart">← Vissza a kosárhoz</button><ol class="checkout-steps" aria-label="A vásárlás lépései"><li aria-current="step"><span>1</span> Összesítő</li><li><span>2</span> Adatok és fizetés</li></ol>${demo?'<p class="demo-banner"><strong>EZ EGY PRÓBAVÁSÁRLÁS.</strong>Nem küldünk rendelést, nem történik fizetés.</p>':config.mode==='test'?'<p class="demo-banner"><strong>STRIPE TESZTMÓD.</strong>Nem történik valódi pénzmozgás. Csak tesztkártyát használj.</p>':''}<form id="checkout-form" class="checkout-form">${config.accountAvailable?'<p class="checkout-account-note">Be vagy jelentkezve. A rendelés a saját fiókodba kerül.</p>':`<fieldset class="checkout-choice"><legend>FIÓKKAL VAGY ANÉLKÜL?</legend><label class="checkout-option${state.checkoutMode==='guest'?' is-selected':''}"><input type="radio" name="checkout-mode" value="guest"${state.checkoutMode==='guest'?' checked':''}><span><strong>Vásárlás vendégként</strong><small>Regisztráció nélkül. A fiók később is ráér.</small></span></label><label class="checkout-option${state.checkoutMode==='account'?' is-selected':''}"><input type="radio" name="checkout-mode" value="account"${state.checkoutMode==='account'?' checked':''}><span><strong>Vásárlás fiókkal</strong><small>A rendelés a saját fiókodba kerül.</small></span></label></fieldset>`}${state.checkoutMode==='account'&&!config.accountAvailable?'<div class="checkout-account-note"><p>A fiókkal vásárláshoz előbb jelentkezz be. A kosarad megmarad.</p><button class="text-button" id="checkout-login" type="button">Bejelentkezés →</button></div>':''}<fieldset class="checkout-shipping"><legend>HOVA KÜLDJÜK?</legend><label for="checkout-country">Célország<select id="checkout-country" name="country">${(config.shippingCountries||SHIPPING_COUNTRIES).map(country=>`<option value="${h(country.code)}"${country.code===state.country?' selected':''}>${h(country.label)}</option>`).join('')}</select></label><p class="shipping-intro">${methods.length?'Válassz szállítási módot:':'A szállítási módok ehhez az országhoz még nincsenek beállítva. Ez nem jelent díjmentes szállítást.'}</p><div class="shipping-methods">${methods.map(method=>{const item=shippingQuote(methods,{country:state.country,methodId:method.id},totals.totalMinor-state.discountMinor);return `<label class="checkout-option${state.methodId===method.id?' is-selected':''}"><input type="radio" name="shipping-method" value="${h(method.id)}"${state.methodId===method.id?' checked':''}><span><strong>${h(method.label)}</strong><small>Várható kézbesítés: ${method.deliveryMinDays}–${method.deliveryMaxDays} munkanap</small>${method.freeAboveMinor!==undefined&&totals.totalMinor-state.discountMinor<method.freeAboveMinor?`<small>Még ${money(method.freeAboveMinor-totals.totalMinor+state.discountMinor)} az ingyenes szállításhoz ennél a módnál.</small>`:''}</span><strong class="shipping-option-price">${item.feeMinor===0?'Díjmentes':money(item.feeMinor)}</strong></label>`;}).join('')}</div></fieldset><details class="checkout-coupon"${state.couponCode?' open':''}><summary>Van kuponkódod?</summary><div class="coupon-field"><label for="coupon-code">Kuponkód<input id="coupon-code" name="coupon" maxlength="40" autocomplete="off" value="${h(state.couponCode)}"></label><button class="secondary-button" type="button" id="apply-coupon">ÉRVÉNYESÍTÉS</button></div><p class="coupon-message" id="coupon-error" role="status">${state.couponCode?`${h(state.couponCode)} · −${money(state.discountMinor)}`:''}</p>${state.couponCode?'<button class="text-button" type="button" id="remove-coupon">Kupon törlése</button>':''}</details></form><div class="checkout-summary"><h3 class="checkout-title">EZ KERÜL A CSOMAGBA</h3><ul>${totals.lines.map(({product,quantity,subtotalMinor})=>`<li><span>${quantity} × ${h(product.name)}</span><strong>${money(subtotalMinor)}</strong></li>`).join('')}${state.discountMinor?`<li><span>Kupon · ${h(state.couponCode)}</span><strong>−${money(state.discountMinor)}</strong></li>`:''}<li><span>Szállítás${quote?' · '+h(quote.label):''}</span><strong>${quote?money(quote.feeMinor):'Még nincs díj'}</strong></li></ul>${!quote?'<p class="demo-note">A feltüntetett összeg csak a termékeket tartalmazza. Valódi rendeléshez előbb a szállítási díjat is be kell állítani.</p>':''}</div>${!demo?'<p class="checkout-data-note">A következő lépésben a Stripe biztonságos oldalán adhatod meg az e-mail-címedet, a szállítási és számlázási adataidat, majd fizethetsz.</p>':''}<p id="stripe-error" class="checkout-error" role="alert" hidden></p>`);
+ for(const input of content.querySelectorAll('[name="shipping-method"]')){const price=input.closest('.checkout-option')?.querySelector('.shipping-option-price'),item=shippingQuote(methods,{country:state.country,methodId:input.value},cartTotal);if(price&&item)price.textContent=item.feeMinor===0?'Díjmentes':money(item.feeMinor);}
+ if(upsell){
+  const markup=styleIcons(`<section class="checkout-upsell" aria-label="Egyszeri ajánlat"><p class="section-kicker">CSAK MOST, A PÉNZTÁRBAN.</p><div class="checkout-upsell-card"><img src="${h(upsell.product.image)}" alt="${h(upsell.product.name)}"><div><h3>${h(upsell.title)}</h3><p>${h(upsell.copy)}</p><strong>${h(upsell.product.name)} · <del>${money(upsell.product.regularPriceMinor)}</del> ${money(upsell.product.priceMinor)}</strong></div><button class="${selectedUpsell?'secondary-button':'primary-button yellow'}" type="button" data-upsell-toggle>${selectedUpsell?'MÉGSEM KÉREM':'KÉREM +'}</button></div></section>`);
+  content.querySelector('#checkout-form').insertAdjacentHTML('beforeend',markup);
+ }
+ if(selectedUpsell){const list=content.querySelector('.checkout-summary ul');list.lastElementChild.insertAdjacentHTML('beforebegin',styleIcons(`<li class="checkout-upsell-line"><span>Egyszeri ajánlat · ${h(selectedUpsell.product.name)}</span><strong>${money(selectedUpsell.product.priceMinor)}</strong></li>`));}
  footer.hidden=false;
  const blocked=state.checkoutMode==='account'&&!config.accountAvailable;
  footer.innerHTML=styleIcons(`<div class="subtotal-row"><span>${quote?'Összesen':'Termékek összesen'}</span><strong>${money(totals.totalMinor-state.discountMinor+(quote?.feeMinor||0))}</strong></div>${demo?`<button class="primary-button yellow" type="submit" form="checkout-form"${blocked?' disabled':''}>PRÓBAVÁSÁRLÁS BEFEJEZÉSE ↗</button><p class="demo-note">Próbavásárlás · nincs fizetési kötelezettség.</p>`:`<button class="primary-button yellow" id="stripe-pay" type="button"${!quote||blocked?' disabled':''}>${config.mode==='test'?'STRIPE TESZTFIZETÉS':'TOVÁBB A FIZETÉSHEZ'} ↗</button><p class="demo-note">A bankkártyaadataidat a Stripe kezeli. A hírlevél külön választható.</p>`}`);
+ footer.querySelector('.subtotal-row strong').textContent=money(cartTotal+(quote?.feeMinor||0));
  const rerender=(focusSelector)=>{renderCheckout({totals,config,onPay,onAccount,onCoupon});content.querySelector(focusSelector)?.focus({preventScroll:true});};
  content.querySelector('#apply-coupon')?.addEventListener('click',async event=>{
   const button=event.currentTarget,code=content.querySelector('#coupon-code').value.trim();button.disabled=true;
@@ -39,12 +53,13 @@ export function renderCheckout({totals,config,onPay,onAccount,onCoupon}){
   catch(error){const node=content.querySelector('#coupon-error');if(node)node.textContent=error.message;button.disabled=false;}
  });
  content.querySelector('#remove-coupon')?.addEventListener('click',()=>{selection.couponCode='';selection.discountMinor=0;rerender('#coupon-code');});
+ content.querySelector('[data-upsell-toggle]')?.addEventListener('click',()=>{selection.upsellProductId=selectedUpsell?'':upsell.productId;rerender('[data-upsell-toggle]');});
  content.querySelector('#checkout-country').addEventListener('change',event=>{selection.country=event.target.value;selection.methodId='';rerender('#checkout-country');});
  for(const input of content.querySelectorAll('[name="checkout-mode"]'))input.addEventListener('change',event=>{selection.checkoutMode=event.target.value;rerender(`[name="checkout-mode"][value="${selection.checkoutMode}"]`);});
  for(const input of content.querySelectorAll('[name="shipping-method"]'))input.addEventListener('change',event=>{selection.methodId=event.target.value;rerender(`[name="shipping-method"][value="${selection.methodId}"]`);});
  content.querySelector('#checkout-login')?.addEventListener('click',()=>onAccount?.());
  footer.querySelector('#stripe-pay')?.addEventListener('click',async event=>{
   const button=event.currentTarget;button.disabled=true;button.textContent='ÁTIRÁNYÍTÁS…';for(const control of content.querySelectorAll('input,select,button'))control.disabled=true;
-  try{await onPay(checkoutSelection(config,totals.totalMinor));}catch(error){const message=content.querySelector('#stripe-error');if(!message||!button.isConnected)return;message.hidden=false;message.textContent=error.message;for(const control of content.querySelectorAll('input,select,button'))control.disabled=false;button.disabled=false;button.textContent='ÚJRAPRÓBÁLOM ↗';}
+  try{await onPay(checkoutSelection(config,totals.totalMinor,selectedUpsell?.product.priceMinor||0));}catch(error){const message=content.querySelector('#stripe-error');if(!message||!button.isConnected)return;message.hidden=false;message.textContent=error.message;for(const control of content.querySelectorAll('input,select,button'))control.disabled=false;button.disabled=false;button.textContent='ÚJRAPRÓBÁLOM ↗';}
  });
 }

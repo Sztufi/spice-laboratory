@@ -190,7 +190,10 @@ function showCheckout() {
 async function completeDemoOrder(event) {
   event.preventDefault();
   const { count, totalMinor:subtotalMinor } = cartTotals(cart, catalogue.products);
-  const selection=checkoutSelection(getCommerceConfig(),subtotalMinor);const totalMinor=subtotalMinor-selection.discountMinor+(selection.quote?.feeMinor||0);
+  const config=getCommerceConfig(),offer=config.upsell;
+  let selection=checkoutSelection(config,subtotalMinor);
+  const upsellMinor=selection.upsellProductId&&offer?.enabled&&offer.productId===selection.upsellProductId?offer.product?.priceMinor||0:0;
+  selection=checkoutSelection(config,subtotalMinor,upsellMinor);const totalMinor=subtotalMinor+upsellMinor-selection.discountMinor+(selection.quote?.feeMinor||0);
   if (!count) { renderCart(); return; }
   const submit = document.querySelector('[form="checkout-form"]');
   if (submit?.disabled) return;

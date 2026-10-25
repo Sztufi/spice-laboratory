@@ -151,3 +151,16 @@ test('demo account orders use the same approved shipping quote and retain it in 
  const response=await handleAccountRequest(req,{db,user:alice,env});assert.equal(response.status,201);
  const row=sqlite.prepare('SELECT total_minor,shipping_json FROM customer_orders').get();assert.equal(row.total_minor,649000);assert.equal(JSON.parse(row.shipping_json).feeMinor,99000);
 });
+test('checkout upsell is independently configured, never mutates the cart, and is revalidated on the server',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher};
+ const setting={id:'upsell',enabled:true,thresholdMinor:500000,productId:'bulls-blaze',discountPercent:20,title:'MÉG EGY JÓ DÖNTÉS.',copy:'Dobd hozzá kedvezményesen.'};
+ sqlite.prepare("INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) VALUES('setting','upsell',?,'published','upsell-v1','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')").run(JSON.stringify(setting));
+ const config=await (await call(ctx,'config')).json();assert.equal(config.upsell.enabled,true);assert.equal(config.upsell.productId,'bulls-blaze');assert.equal(config.upsell.product.priceMinor,220000);
+ const result=await call(ctx,'checkout','POST',{...checkoutBody(),upsellProductId:'bulls-blaze'});assert.equal(result.status,201);
+ assert.equal(mock.params.get('line_items[1][price_data][product_data][name]'),'Bull’s Blaze');assert.equal(mock.params.get('line_items[1][price_data][unit_amount]'),'220000');
+ const checkout=sqlite.prepare('SELECT items_json,total_minor FROM payment_checkouts').get(),items=JSON.parse(checkout.items_json);assert.equal(items.length,2);assert.equal(items[0].id,'fries-salt');assert.equal(items[1].id,'bulls-blaze');assert.equal(items[1].upsell,true);assert.equal(checkout.total_minor,869000);
+ const duplicate={...checkoutBody(),requestId:crypto.randomUUID(),items:[{id:'bulls-blaze',quantity:2}],upsellProductId:'bulls-blaze'};
+ assert.equal((await call(ctx,'checkout','POST',duplicate)).status,400);
+ const below={...checkoutBody(),requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:1}],upsellProductId:'bulls-blaze'};
+ assert.equal((await call(ctx,'checkout','POST',below)).status,400);
+});

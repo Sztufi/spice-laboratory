@@ -8,6 +8,7 @@ import { assertSameOrigin } from './account.mjs';
 import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
 import {handleWithdrawal,withdrawalMailReady} from './withdrawals.mjs';
 import {syncInventory,requireFreshInventory} from './inventory.mjs';
+import {publicUpsell,selectedUpsell} from './upsell.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -60,10 +61,14 @@ async function createCheckout(request,ctx,config,input){
  const {db,user,env,fetcher,catalogue}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
  if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
  const totals=validateItems(input.items,catalogue);
- const items=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,sku:product.sku||'',name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
+ const cartItems=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,sku:product.sku||'',name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
+ let upsell;try{upsell=selectedUpsell(input.upsellProductId,config.upsell,cartItems,totals.totalMinor);}catch(error){fail(400,error.message);}
+ if(upsell){const product=catalogue.products.find(item=>item.id===upsell.id);upsell.sku=product?.sku||'';}
+ const items=upsell?[...cartItems,upsell]:cartItems;
  const discount=input.couponCode?await couponQuote(db,input.couponCode,totals.totalMinor):null;
- const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},totals.totalMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
- const total=totals.totalMinor-(discount?.discountMinor||0)+shipping.feeMinor;
+ const merchandiseMinor=totals.totalMinor+(upsell?.priceMinor||0);
+ const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},merchandiseMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
+ const total=merchandiseMinor-(discount?.discountMinor||0)+shipping.feeMinor;
  const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode});
  await customer(db,user);
  let row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();
@@ -149,7 +154,10 @@ export async function handleCommerceRequest(request,ctx){
  try {
  const {db,user}=ctx,env=await runtimeEnv(db,ctx.env||{}),config=commerceConfig(env),url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
  ctx={...ctx,env};
- if(request.method==='GET'&&path==='config')return json({...config,accountAvailable:!!user?.userId&&!!user?.email});
+ if(request.method==='GET'&&path==='config'){
+  const store=db?await loadStore(db,{env}):null;
+  return json({...config,upsell:publicUpsell(store?.settings,store?.catalogue),accountAvailable:!!user?.userId&&!!user?.email});
+ }
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stock'&&request.method==='GET'){
   const sync=await syncInventory(db,env,{fetcher:ctx.fetcher}),{catalogue}=await loadStore(db,{env});
@@ -187,7 +195,7 @@ export async function handleCommerceRequest(request,ctx){
   const principal=input.checkoutMode==='guest'?await guestCheckoutAccess(request,db):user;
   if(!principal?.userId||(input.checkoutMode==='account'&&!principal.email))fail(401,input.checkoutMode==='guest'?'A vendégpénztárhoz engedélyezd a szükséges sütiket, majd próbáld újra.':'A fiókkal vásárláshoz jelentkezz be.');
   if(config.stripeEnabled&&config.mode==='live')await requireFreshInventory(db,env,ctx.fetcher);
-  const {catalogue}=await loadStore(db,{env});return await createCheckout(request,{...ctx,user:principal,catalogue},config,input);
+  const store=await loadStore(db,{env});config.upsell=publicUpsell(store.settings,store.catalogue);return await createCheckout(request,{...ctx,user:principal,catalogue:store.catalogue},config,input);
  }
  if(path==='claim-order'&&request.method==='POST'){
   if(!user?.userId||!user?.email)fail(401,'A rendelés fiókhoz kapcsolásához jelentkezz be.');

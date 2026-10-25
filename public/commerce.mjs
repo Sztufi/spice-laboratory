@@ -8,11 +8,11 @@ export async function commerceApi(path,options={}){
  const result=await response.json();if(!response.ok){const error=new Error(result.error||'A művelet most nem sikerült.');error.status=response.status;throw error;}return result;
 }
 export async function startStripeCheckout(cart,selection){
- const fingerprint=JSON.stringify({cart,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||''});
+ const fingerprint=JSON.stringify({cart,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||'',upsellProductId:selection.upsellProductId||''});
  if(checkoutAttempt?.fingerprint!==fingerprint)checkoutAttempt={fingerprint,requestId:crypto.randomUUID()};
  try{
  if(selection.checkoutMode==='guest')await commerceApi('checkout-access',{method:'POST',body:'{}'});
- const result=await commerceApi('checkout',{method:'POST',body:JSON.stringify({items:cart,requestId:checkoutAttempt.requestId,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||''})});
+ const result=await commerceApi('checkout',{method:'POST',body:JSON.stringify({items:cart,requestId:checkoutAttempt.requestId,checkoutMode:selection.checkoutMode,country:selection.country,shippingMethodId:selection.methodId,couponCode:selection.couponCode||'',upsellProductId:selection.upsellProductId||''})});
  if(!result.url?.startsWith('https://checkout.stripe.com/'))throw new Error('Hibás fizetési hivatkozás.');
  window.location.assign(result.url);
  }catch(error){if(error.status===409)checkoutAttempt=null;throw error;}

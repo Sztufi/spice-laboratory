@@ -83,6 +83,10 @@ function validate(kind,input,store){
   data={id,...validateSmartbillSettings(input)};
  }else if(kind==='setting'&&id==='shipping'){
   const methods=list(input.methods,10);const valid=shippingMethods({SHIPPING_METHODS_JSON:JSON.stringify(methods)});if(valid.length!==methods.length)fail(400,'Ellenőrizd a szállítási díjakat és kézbesítési időket.');data={id,methods:valid};
+ }else if(kind==='setting'&&id==='upsell'){
+  const enabled=input.enabled===true,productId=text(input.productId,90),product=store.catalogue.products.find(item=>item.id===productId&&item.status==='published');
+  if(enabled&&!product)fail(400,'Aktív upsellhez válassz egy közzétett terméket.');
+  data={id,enabled,thresholdMinor:int(input.thresholdMinor,0,100000000),productId:product?.id||'',discountPercent:int(input.discountPercent,1,90),title:text(input.title,120,true),copy:text(input.copy,500,true)};
  }else fail(404,'Ismeretlen adattípus.');
  if(['product','category','recipe'].includes(kind))data.seo=validateSeo(input.seo);
  return {...data,status,revision:text(input.revision,100)||'new'};
@@ -92,7 +96,7 @@ async function save(db,user,kind,data,isNew){
  const {status,revision,...payload}=data;
  if(isNew&&(recordDefaults(kind).some(item=>item.id===data.id)||await q(db,'SELECT id FROM store_records WHERE kind=? AND id=?',kind,data.id).first()))fail(409,'Ez az azonosító már létezik.');
  const previous=await q(db,'SELECT revision FROM store_records WHERE kind=? AND id=?',kind,data.id).first();
- if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo','smartbill'].includes(data.id)))fail(404,'Nem található bejegyzés.');
+ if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo','smartbill','upsell'].includes(data.id)))fail(404,'Nem található bejegyzés.');
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
  const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE (?<>'product' OR NOT EXISTS(SELECT 1 FROM store_records WHERE kind='product' AND id<>? AND json_extract(payload_json,'$.sku')=?))

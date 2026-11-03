@@ -100,7 +100,7 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  else if(path==='/gyik'){title='Gyakori kérdések';content=faq(config);}
  else if(path==='/szallitas-es-fizetes'){title='Szállítás és fizetés';content=shippingPage(config);}
  else if(path==='/visszakuldes'){title='Visszaküldés és reklamáció';content=returnsPage(config);}
- else if(/^\/kovetes\/[a-f0-9]{64}$/.test(path)){title='Csomagkövetés';description='Kövesd a Spice Laboratory rendelésed állapotát.';content=trackingPage(path.split('/').pop());}
+ else if(/^\/kovetes\/(?:[a-f0-9]{64}|demo)$/.test(path)){title='Csomagkövetés';description='Kövesd a Spice Laboratory rendelésed állapotát.';content=trackingPage(path.split('/').pop());}
  else if(path==='/fiok'){title='Saját fiók és rendelések';content=accountPage();}
  else if(['/aszf','/adatkezeles','/sutik'].includes(path)){title=legalLinks.find(item=>item.path===path).label;content=legalPage(path.slice(1),config);}
  else{status=404;title='Az oldal nem található';content=`${intro('404 · EZ MOST NEM KEVEREDIK.','EZ AZ OLDAL<br>ELMENT EBÉDELNI.','Ezt az oldalt nem találjuk. A fűszerek viszont megvannak: keresd meg őket a termékek között.',[{label:'Az oldal nem található'}])}<form class="not-found-search" method="get" action="/termekek"><label for="page-search">Termék vagy összetevő keresése</label><div><input id="page-search" name="q" type="search" maxlength="150" placeholder="Például: fokhagyma"><button class="primary-button yellow" type="submit">KERESÉS →</button></div></form><div class="page-bottom-cta">${link('/termekek','TERMÉKEK MEGNÉZÉSE →','secondary-button')}</div>`;}

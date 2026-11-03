@@ -15,7 +15,7 @@ import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock,s
 import {omnisendRead,omnisendWrite} from './admin-omnisend.mjs';
 import {inventoryOverview,syncInventory,reconcileStock,assertMappingChange} from './inventory.mjs';
 import {productMedia} from './product-media.mjs';
-import {validateGlsSettings,glsStatus,createGlsLabel,glsLabel} from './gls.mjs';
+import {validateGlsSettings,glsStatus,createGlsLabel,glsLabel,ensureTrackingLinks} from './gls.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -118,7 +118,8 @@ async function overview(db,user,env){
   all(db,'SELECT action,entity,entity_id,created_at FROM store_admin_audit ORDER BY created_at DESC LIMIT 50')
  ]);
  const totals=await q(db,"SELECT COUNT(*) AS orders,COALESCE(SUM(total_minor),0) AS revenue,(SELECT COALESCE(SUM(r.amount_minor),0) FROM payment_refunds r JOIN customer_orders o ON o.id=r.checkout_id WHERE r.status='succeeded' AND o.kind='stripe' AND o.status='paid' AND o.currency='HUF') AS refunded FROM customer_orders WHERE kind='stripe' AND status='paid' AND currency='HUF'").first();
- return {user:{email:user.email,name:user.fullName||user.email,provider:user.provider||'sites'},...store,orders:orders.map(row=>({...row,...refundSummary(row),items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
+ await ensureTrackingLinks(db,orders);const origin='https://spicelaboratory.eu';
+ return {user:{email:user.email,name:user.fullName||user.email,provider:user.provider||'sites'},...store,orders:orders.map(row=>({...row,...refundSummary(row),trackingPageUrl:row.trackingToken?origin+'/kovetes/'+row.trackingToken:'',items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined,trackingToken:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
 }
 async function upload(request,{db,bucket,user}){
  if(!bucket)fail(503,'A képtár nem érhető el.');

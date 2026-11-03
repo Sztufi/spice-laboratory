@@ -9,6 +9,8 @@ import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
 import {handleWithdrawal,withdrawalMailReady} from './withdrawals.mjs';
 import {syncInventory,requireFreshInventory} from './inventory.mjs';
 import {publicUpsell,selectedUpsell} from './upsell.mjs';
+import {publicTracking,ensureTrackingLink} from './gls.mjs';
+import {sendOrderConfirmation} from './order-email.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -114,7 +116,7 @@ async function applySession(db,row,session,eventId,eventType){
  }
  if(status==='expired')statements.push(q(db,'DELETE FROM store_stock_reservations WHERE checkout_id=?',row.id));
  if(eventId)statements.push(q(db,'INSERT INTO payment_events(id,checkout_id,type,created_at) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',eventId,row.id,eventType,now()));
- await db.batch(statements);return {status:row.status==='paid'?'paid':status,orderId:paid||row.status==='paid'?row.id:null,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null};
+ await db.batch(statements);if(paid||row.status==='paid')await ensureTrackingLink(db,row.id);return {status:row.status==='paid'?'paid':status,orderId:paid||row.status==='paid'?row.id:null,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null};
 }
 async function syncPreference(ctx,row){
  const {db,env,fetcher=fetch}=ctx;
@@ -158,6 +160,7 @@ export async function handleCommerceRequest(request,ctx){
   const store=db?await loadStore(db,{env}):null;
   return json({...config,upsell:publicUpsell(store?.settings,store?.catalogue),accountAvailable:!!user?.userId&&!!user?.email});
  }
+ if(request.method==='GET'&&path.startsWith('tracking/'))return json(await publicTracking(db,env,path.slice('tracking/'.length),ctx.fetcher));
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stock'&&request.method==='GET'){
   const sync=await syncInventory(db,env,{fetcher:ctx.fetcher}),{catalogue}=await loadStore(db,{env});
@@ -172,7 +175,7 @@ export async function handleCommerceRequest(request,ctx){
  if(REFUND_EVENTS.includes(event.type)){await syncRefundEvent(db,event,path=>stripe(env,path,{fetcher:ctx.fetcher}));return json({received:true});}
  const session=event.data?.object;const row=await q(db,'SELECT * FROM payment_checkouts WHERE session_id=?',session?.id??'').first();
  if(!row)return json({received:true,ignored:true});
- await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({received:true});
+ await applySession(db,row,session,event.id,event.type);try{await deliverMarketingEvent(ctx,row.id);await sendOrderConfirmation(db,row,env,ctx.fetcher);}catch{}return json({received:true});
  }
  if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
  if(path==='restock'&&request.method==='POST')return json(await subscribeRestock(await body(request),request,ctx));
@@ -213,7 +216,7 @@ export async function handleCommerceRequest(request,ctx){
  const row=await q(db,'SELECT * FROM payment_checkouts WHERE session_id=? AND (user_id=? OR user_id=?)',id,user?.userId||'',guest?.userId||'').first();if(!row)fail(404,'A fizetés nem található.');
  if(row.status==='paid'){try{await deliverMarketingEvent(ctx,row.id);}catch{}return json({status:'paid',orderId:row.id,mode:row.mode,items:JSON.parse(row.items_json),guest:row.user_id.startsWith('guest:'),shipping:row.shipping_json?JSON.parse(row.shipping_json):null});}
  if(!env.STRIPE_SECRET_KEY)fail(503,'A fizetés állapota most nem ellenőrizhető.');
- const session=await stripe(env,`checkout/sessions/${encodeURIComponent(id)}`,{fetcher:ctx.fetcher});const result=await applySession(db,row,session);try{await deliverMarketingEvent(ctx,row.id);}catch{}return json(result);
+ const session=await stripe(env,`checkout/sessions/${encodeURIComponent(id)}`,{fetcher:ctx.fetcher});const result=await applySession(db,row,session);try{await deliverMarketingEvent(ctx,row.id);await sendOrderConfirmation(db,row,env,ctx.fetcher);}catch{}return json(result);
  }
  if(!user?.userId||!user?.email)fail(401,'Ehhez jelentkezz be a fiókodba.');
  if(path==='marketing'&&['GET','PUT'].includes(request.method))return await preferences(request,ctx,config);

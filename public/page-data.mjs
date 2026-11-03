@@ -5,5 +5,5 @@ export const categoryPages=[
  {id:'international',slug:'vilagkonyha',label:'Világkonyha',headline:'NEM KELL HOZZÁ REPJEGY.',description:'Cajun vagy Chimichurri? Más konyhák ihlette keverékek, a saját vacsorádhoz.',color:'#e6c9f0',productId:'cajun-mix'}
 ];
 export const categoryPath=(id,activeCategories=categoryPages)=>{const page=activeCategories.find(item=>item.id===id);const original=categoryPages.find(item=>item.id===id);return page?'/kategoria/'+(page.slug||original?.slug||page.id):'/termekek';};
-export const supportLinks=[{path:'/gyik',label:'Gyakori kérdések'},{path:'/szallitas-es-fizetes',label:'Szállítás és fizetés'},{path:'/izcsere-garancia',label:'Ízcsere Garancia'},{path:'/visszakuldes',label:'Visszaküldés és reklamáció'},{path:'/fiok',label:'Saját fiók és rendeléseim'}];
+export const supportLinks=[{path:'/gyik',label:'Gyakori kérdések'},{path:'/szallitas-es-fizetes',label:'Szállítás és fizetés'},{path:'/izcsere-garancia',label:'Ízgarancia'},{path:'/visszakuldes',label:'Visszaküldés és reklamáció'},{path:'/fiok',label:'Saját fiók és rendeléseim'}];
 export const legalLinks=[{path:'/aszf',label:'Vásárlási feltételek'},{path:'/adatkezeles',label:'Adatkezelés'},{path:'/sutik',label:'Sütik és böngészőadatok'}];

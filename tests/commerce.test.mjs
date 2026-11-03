@@ -11,7 +11,7 @@ function call(ctx,path,method='GET',body){return handleCommerceRequest(request(p
 function mockStripe(){let calls=0,params;const session={id:'cs_test_123',url:'https://checkout.stripe.com/c/pay/cs_test_123',expires_at:Math.floor(Date.now()/1000)+3600,livemode:false,status:'open',payment_status:'unpaid',currency:'huf',amount_total:649000};return {session,get calls(){return calls;},get params(){return params;},async fetcher(url,options){calls++;if(options.method==='POST'){params=new URLSearchParams(options.body);session.metadata={checkout_id:params.get('metadata[checkout_id]')};session.client_reference_id=params.get('client_reference_id');}return Response.json(session);}};}
 async function sign(event,secret=env.STRIPE_WEBHOOK_SECRET,t=Math.floor(Date.now()/1000)){const raw=JSON.stringify(event),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${t}.${raw}`)));return {raw,signature:`t=${t},v1=${Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('')}`};}
 async function webhook(ctx,event,options={}){const signed=await sign(event,options.secret,options.timestamp);return handleCommerceRequest(new Request(origin+'/api/commerce/stripe-webhook',{method:'POST',headers:{'stripe-signature':signed.signature},body:options.body??signed.raw}),ctx);}
-const checkoutBody=()=>({checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1});
+const checkoutBody=()=>({checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1,customer:{email:'alice@example.com',shipping:{name:'Alice Example',phone:'+3612345678',address:{country:'HU',postalCode:'1111',city:'Budapest',line1:'Példa utca 1.',line2:''}},billingSame:true,termsAccepted:true,privacyAccepted:true}});
 test('provider configuration fails closed until every payment prerequisite is explicit',()=>{
  assert.equal(commerceConfig().stripeEnabled,false);assert.equal(commerceConfig(env).stripeEnabled,true);
  for(const key of ['STRIPE_WEBHOOK_READY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','SHIPPING_METHODS_JSON','MERCHANT_PRICES_APPROVED'])assert.equal(commerceConfig({...env,[key]:undefined}).stripeEnabled,false,key);
@@ -25,7 +25,7 @@ test('checkout requires identity and same-origin and never trusts browser prices
  assert.equal((await handleCommerceRequest(request('checkout','POST',checkoutBody(),'https://attacker.test'),ctx)).status,403);
  const input=checkoutBody(),result=await call(ctx,'checkout','POST',input);assert.equal(result.status,201);
  assert.equal(mock.params.get('line_items[0][price_data][currency]'),'huf');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][currency]'),'huf');assert.equal(mock.params.get('line_items[0][price_data][unit_amount]'),'275000');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][amount]'),'99000');
- assert.equal(mock.params.get('customer_email'),alice.email);assert.equal(mock.params.get('shipping_address_collection[allowed_countries][0]'),'HU');
+ assert.equal(mock.params.get('customer_email'),'alice@example.com');assert.equal(mock.params.has('shipping_address_collection[allowed_countries][0]'),false);
  assert.equal((await call(ctx,'checkout','POST',input)).status,200);assert.equal(mock.calls,1);
  assert.equal((await call(ctx,'checkout','POST',{...input,items:[{id:'fries-salt',quantity:3}]})).status,409);
  for(const items of [[{id:'unknown',quantity:1}],[{id:'fries-salt',quantity:1.2}],[{id:'fries-salt',quantity:100}],[]])assert.equal((await call(ctx,'checkout','POST',{...checkoutBody(),items})).status,400);
@@ -96,7 +96,7 @@ test('guest checkout access is server-issued, cookie-only, short-lived, and cann
 test('guest can pay without an account, while session IDs alone and other visitors grant no access',async()=>{
  const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:null,fetcher:mock.fetcher},cookie=await guestCookie(ctx);
  const input={...checkoutBody(),checkoutMode:'guest',email:alice.email};
- assert.equal((await callCookie(ctx,'checkout','POST',input,cookie)).status,201);assert.equal(mock.params.has('customer_email'),false);
+ assert.equal((await callCookie(ctx,'checkout','POST',input,cookie)).status,201);assert.equal(mock.params.get('customer_email'),'alice@example.com');
  assert.equal((await callCookie(ctx,'checkout','POST',input,cookie)).status,200);assert.equal(mock.calls,1);
  assert.equal((await call({...ctx,user:alice},'checkout-status?session_id=cs_test_123')).status,404);
  const stranger=await guestCookie(ctx);assert.equal((await callCookie(ctx,'checkout-status?session_id=cs_test_123','GET',undefined,stranger)).status,404);
@@ -129,11 +129,12 @@ test('expired and fabricated guest capabilities are rejected before checkout or 
 });
 test('shipping is country-scoped, server priced, immutable in the order, and part of idempotency',async()=>{
  const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher},input=checkoutBody();
- assert.equal((await call(ctx,'checkout','POST',{...input,country:'RO'})).status,400);
+ const romanianCustomer={...input.customer,shipping:{...input.customer.shipping,address:{...input.customer.shipping.address,country:'RO'}}};
+ assert.equal((await call(ctx,'checkout','POST',{...input,customer:romanianCustomer})).status,400);
  assert.equal((await call(ctx,'checkout','POST',{...input,shippingMethodId:'not-real'})).status,400);
  assert.equal((await call(ctx,'checkout','POST',{...input,shippingMinor:1})).status,201);
- assert.equal(mock.params.get('shipping_address_collection[allowed_countries][0]'),'HU');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]'),'2');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]'),'4');
- assert.equal((await call(ctx,'checkout','POST',{...input,country:'RO',shippingMethodId:'ro-home'})).status,409);
+ assert.equal(mock.params.has('shipping_address_collection[allowed_countries][0]'),false);assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]'),'2');assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]'),'4');
+ assert.equal((await call(ctx,'checkout','POST',{...input,customer:romanianCustomer,shippingMethodId:'ro-home'})).status,409);
  mock.session.status='complete';mock.session.payment_status='paid';await call(ctx,'checkout-status?session_id=cs_test_123');
  assert.equal(JSON.parse(sqlite.prepare('SELECT shipping_json FROM customer_orders').get().shipping_json).feeMinor,99000);
 });

@@ -59,23 +59,42 @@ function validateItems(items,catalogue){
  const ids=new Set();for(const item of items){if(!catalogue.products.some(p=>p.id===item?.id)||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>99||ids.has(item.id))fail(400,'Hibás termék vagy mennyiség.');ids.add(item.id);}
  assertAvailable(items,catalogue);return cartTotals(items,catalogue.products);
 }
+function checkoutText(value,label,max,{email=false,phone=false}={}){
+ const text=typeof value==='string'?value.trim():'';
+ if(!text||text.length>max)fail(400,`Érvényes ${label} szükséges.`);
+ if(email&&!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(text))fail(400,'Érvényes e-mail-cím szükséges.');
+ if(phone&&!/^\+?[0-9 ()-]{6,40}$/.test(text))fail(400,'Érvényes telefonszám szükséges.');
+ return text;
+}
+function checkoutAddress(input,countries,label){
+ const value=input&&typeof input==='object'?input:{},country=String(value.country||'').toUpperCase();
+ if(!countries.has(country))fail(400,`A ${label} országa nem támogatott.`);
+ return {country,postalCode:checkoutText(value.postalCode,`${label} irányítószám`,20),city:checkoutText(value.city,`${label} település`,100),line1:checkoutText(value.line1,`${label} utca és házszám`,160),line2:typeof value.line2==='string'?value.line2.trim().slice(0,160):''};
+}
+function checkoutCustomer(input,countries){
+ const raw=input?.customer;if(!raw||typeof raw!=='object')fail(400,'Add meg a rendelési adatokat.');
+ if(raw.termsAccepted!==true||raw.privacyAccepted!==true)fail(400,'Az ÁSZF és az adatkezelési tájékoztató elfogadása szükséges.');
+ const email=checkoutText(raw.email,'e-mail-cím',254,{email:true}),shippingRaw=raw.shipping||{},shipping={name:checkoutText(shippingRaw.name,'szállítási név',120),phone:checkoutText(shippingRaw.phone,'telefonszám',40,{phone:true}),address:checkoutAddress(shippingRaw.address,countries,'szállítási cím')};
+ const same=raw.billingSame!==false,billing=same?{name:shipping.name,email,address:{...shipping.address}}:{name:checkoutText(raw.billing?.name,'számlázási név',120),email,address:checkoutAddress(raw.billing?.address,countries,'számlázási cím')};
+ return {billing,shipping,consent:{termsAccepted:true,privacyAccepted:true,version:'checkout-v1',acceptedAt:now()}};
+}
 async function createCheckout(request,ctx,config,input){
  const {db,user,env,fetcher,catalogue}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
  if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
- const totals=validateItems(input.items,catalogue);
+ const totals=validateItems(input.items,catalogue),customerData=checkoutCustomer(input,new Set((config.shippingCountries||[]).map(item=>item.code)));
  const cartItems=totals.lines.map(({product,quantity,subtotalMinor})=>({id:product.id,sku:product.sku||'',name:product.name,priceMinor:product.priceMinor,quantity,subtotalMinor})).sort((a,b)=>a.id.localeCompare(b.id));
  let upsell;try{upsell=selectedUpsell(input.upsellProductId,config.upsell,cartItems,totals.totalMinor);}catch(error){fail(400,error.message);}
  if(upsell){const product=catalogue.products.find(item=>item.id===upsell.id);upsell.sku=product?.sku||'';}
  const items=upsell?[...cartItems,upsell]:cartItems;
  const discount=input.couponCode?await couponQuote(db,input.couponCode,totals.totalMinor):null;
  const merchandiseMinor=totals.totalMinor+(upsell?.priceMinor||0);
- const shipping=shippingQuote(config.shippingMethods,{country:input.country,methodId:input.shippingMethodId},merchandiseMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
+ const shipping=shippingQuote(config.shippingMethods,{country:customerData.shipping.address.country,methodId:input.shippingMethodId},merchandiseMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
  const total=merchandiseMinor-(discount?.discountMinor||0)+shipping.feeMinor;
  const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode});
  await customer(db,user);
  let row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();
  if(row&&row.fingerprint!==fingerprint)fail(409,'Ehhez a fizetéshez más kosár tartozik. Indíts új fizetést.');
- if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now(),JSON.stringify(shipping),discount?JSON.stringify(discount):null).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
+ if(!row){const id=crypto.randomUUID();await q(db,'INSERT INTO payment_checkouts(id,user_id,request_id,fingerprint,items_json,total_minor,currency,mode,status,created_at,updated_at,shipping_json,discount_json,customer_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,input.requestId,fingerprint,JSON.stringify(items),total,catalogue.currency,config.mode,'creating',now(),now(),JSON.stringify(shipping),discount?JSON.stringify(discount):null,JSON.stringify(customerData)).run();row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();}
  if(row.fingerprint!==fingerprint)fail(409,'A kosár időközben megváltozott.');
  if(row.status==='paid')fail(409,'Ezt a rendelést már kifizetted.');
  if(row.session_id){if(row.expires_at*1000<=Date.now())fail(409,'A fizetési hivatkozás lejárt. Indíts új fizetést.');return json({url:row.session_url,checkoutId:row.id,mode:row.mode});}
@@ -83,8 +102,8 @@ async function createCheckout(request,ctx,config,input){
  if(Date.now()-Date.parse(row.created_at)>23*60*60*1000)fail(409,'Ez a fizetési kísérlet lejárt. Indíts új fizetést.');
  if(config.mode==='live')await reserveStock(db,row.id,items,{env});
  const origin=new URL(request.url).origin;
- const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'required',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card','shipping_address_collection[allowed_countries][0]':shipping.country,success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
- if(user.email)params.set('customer_email',user.email);
+ const params=new URLSearchParams({mode:'payment',locale:'hu',expires_at:String(Math.floor(Date.now()/1000)+3600),billing_address_collection:'auto',client_reference_id:row.id,'metadata[checkout_id]':row.id,'payment_method_types[0]':'card',success_url:`${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,cancel_url:`${origin}/?payment=cancelled`});
+ params.set('customer_email',customerData.billing.email);
  params.set('payment_intent_data[metadata][checkout_id]',row.id);
  if(discount){
   const coupon=await stripe(env,'coupons',{params:new URLSearchParams({duration:'once',currency:catalogue.currency.toLowerCase(),amount_off:String(discount.discountMinor),name:discount.code}),key:`spice-coupon-${row.id}`,fetcher});
@@ -105,7 +124,7 @@ async function applySession(db,row,session,eventId,eventType){
  const status=paid?'paid':session.status==='expired'?'expired':'open';
  const pi=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
  if(pi&&(!/^pi_[a-zA-Z0-9_]{1,200}$/.test(pi)||row.payment_intent_id&&row.payment_intent_id!==pi))fail(400,'Eltérő fizetésazonosító.');
- const statements=[q(db,"UPDATE payment_checkouts SET status=CASE WHEN status='paid' THEN status ELSE ? END, customer_json=COALESCE(?,customer_json),updated_at=? WHERE id=?",status,paid?JSON.stringify({billing:session.customer_details,shipping:session.collected_information?.shipping_details??session.shipping_details??null}):null,now(),row.id)];
+ const statements=[q(db,"UPDATE payment_checkouts SET status=CASE WHEN status='paid' THEN status ELSE ? END, customer_json=COALESCE(customer_json,?),updated_at=? WHERE id=?",status,paid?JSON.stringify({billing:session.customer_details,shipping:session.collected_information?.shipping_details??session.shipping_details??null}):null,now(),row.id)];
  if(pi)statements.push(q(db,'UPDATE payment_checkouts SET payment_intent_id=? WHERE id=?',pi,row.id));
  if(paid){
  const number=`SL-${row.id.slice(0,8).toUpperCase()}`;

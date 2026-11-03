@@ -1,4 +1,4 @@
-import {merchant,termsContent,privacyContent,cookiesContent,returnsContent} from './legal-pages.mjs';
+import {merchant,termsContent,privacyContent,cookiesContent,returnsContent,tasteGuaranteeContent} from './legal-pages.mjs';
 import {loginPanel,loginDescription} from '../public/account-login.mjs';
 import {productExperience} from './product-experience.mjs';
 import {styleIcons,brandIcon} from '../public/brand-icons.mjs';
@@ -100,6 +100,7 @@ function renderPage(base,{pathname='/',search='',env={},origin='https://spice-la
  else if(path==='/gyik'){title='Gyakori kérdések';content=faq(config);}
  else if(path==='/szallitas-es-fizetes'){title='Szállítás és fizetés';content=shippingPage(config);}
  else if(path==='/visszakuldes'){title='Visszaküldés és reklamáció';content=returnsPage(config);}
+ else if(path==='/izcsere-garancia'){title='Ízcsere Garancia';description='Ha egy Spice Laboratory fűszer nem jön be, válassz helyette másik ízt kuponnal.';content=`${intro('BIZTOSAK VAGYUNK BENNE.','ÍZCSERE<br>GARANCIA.','Nem ízlett? Küldd vissza szinte tele, és adjunk esélyt egy másik íznek.',[{label:'Ízcsere Garancia'}])}<div class="legal-copy editorial-copy">${tasteGuaranteeContent()}</div>${helpCta()}`;}
  else if(/^\/kovetes\/(?:[a-f0-9]{64}|demo)$/.test(path)){title='Csomagkövetés';description='Kövesd a Spice Laboratory rendelésed állapotát.';content=trackingPage(path.split('/').pop());}
  else if(path==='/fiok'){title='Saját fiók és rendelések';content=accountPage();}
  else if(['/aszf','/adatkezeles','/sutik'].includes(path)){title=legalLinks.find(item=>item.path===path).label;content=legalPage(path.slice(1),config);}

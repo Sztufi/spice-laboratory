@@ -69,7 +69,7 @@ function checkoutText(value,label,max,{email=false,phone=false}={}){
 function checkoutAddress(input,countries,label){
  const value=input&&typeof input==='object'?input:{},country=String(value.country||'').toUpperCase();
  if(!countries.has(country))fail(400,`A ${label} országa nem támogatott.`);
- return {country,postalCode:checkoutText(value.postalCode,`${label} irányítószám`,20),city:checkoutText(value.city,`${label} település`,100),line1:checkoutText(value.line1,`${label} utca és házszám`,160),line2:typeof value.line2==='string'?value.line2.trim().slice(0,160):''};
+ return {country,postal_code:checkoutText(value.postalCode,`${label} irányítószám`,20),city:checkoutText(value.city,`${label} település`,100),line1:checkoutText(value.line1,`${label} utca és házszám`,160),line2:typeof value.line2==='string'?value.line2.trim().slice(0,160):''};
 }
 function checkoutCustomer(input,countries){
  const raw=input?.customer;if(!raw||typeof raw!=='object')fail(400,'Add meg a rendelési adatokat.');
@@ -90,7 +90,8 @@ async function createCheckout(request,ctx,config,input){
  const merchandiseMinor=totals.totalMinor+(upsell?.priceMinor||0);
  const shipping=shippingQuote(config.shippingMethods,{country:customerData.shipping.address.country,methodId:input.shippingMethodId},merchandiseMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
  const total=merchandiseMinor-(discount?.discountMinor||0)+shipping.feeMinor;
- const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode});
+ const customerHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({billing:customerData.billing,shipping:customerData.shipping})))),x=>x.toString(16).padStart(2,'0')).join('');
+ const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode,customerHash});
  await customer(db,user);
  let row=await q(db,'SELECT * FROM payment_checkouts WHERE user_id = ? AND request_id = ?',user.userId,input.requestId).first();
  if(row&&row.fingerprint!==fingerprint)fail(409,'Ehhez a fizetéshez más kosár tartozik. Indíts új fizetést.');

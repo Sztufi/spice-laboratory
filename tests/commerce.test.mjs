@@ -12,6 +12,19 @@ function mockStripe(){let calls=0,params;const session={id:'cs_test_123',url:'ht
 async function sign(event,secret=env.STRIPE_WEBHOOK_SECRET,t=Math.floor(Date.now()/1000)){const raw=JSON.stringify(event),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${t}.${raw}`)));return {raw,signature:`t=${t},v1=${Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('')}`};}
 async function webhook(ctx,event,options={}){const signed=await sign(event,options.secret,options.timestamp);return handleCommerceRequest(new Request(origin+'/api/commerce/stripe-webhook',{method:'POST',headers:{'stripe-signature':signed.signature},body:options.body??signed.raw}),ctx);}
 const checkoutBody=()=>({checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1,customer:{email:'alice@example.com',shipping:{name:'Alice Example',phone:'+3612345678',address:{country:'HU',postalCode:'1111',city:'Budapest',line1:'Példa utca 1.',line2:''}},billingSame:true,termsAccepted:true,privacyAccepted:true}});
+test('checkout preserves validated customer addresses after Stripe completes and rejects changed details on a reused attempt',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher},input=checkoutBody();
+ assert.equal((await call(ctx,'checkout','POST',{...input,customer:undefined})).status,400);
+ assert.equal((await call(ctx,'checkout','POST',{...input,customer:{...input.customer,termsAccepted:false}})).status,400);
+ assert.equal((await call(ctx,'checkout','POST',input)).status,201);
+ let saved=JSON.parse(sqlite.prepare('SELECT customer_json FROM payment_checkouts').get().customer_json);
+ assert.equal(saved.shipping.address.postal_code,'1111');assert.equal(saved.billing.address.line1,'Példa utca 1.');assert.equal(saved.shipping.phone,'+3612345678');
+ assert.equal((await call(ctx,'checkout','POST',{...input,customer:{...input.customer,email:'other@example.com'}})).status,409);
+ mock.session.customer_details={email:'provider@example.com',address:null};mock.session.status='complete';mock.session.payment_status='paid';
+ assert.equal((await call(ctx,'checkout-status?session_id=cs_test_123')).status,200);
+ saved=JSON.parse(sqlite.prepare('SELECT customer_json FROM payment_checkouts').get().customer_json);
+ assert.equal(saved.billing.email,input.customer.email);assert.equal(saved.shipping.address.postal_code,'1111');
+});
 test('provider configuration fails closed until every payment prerequisite is explicit',()=>{
  assert.equal(commerceConfig().stripeEnabled,false);assert.equal(commerceConfig(env).stripeEnabled,true);
  for(const key of ['STRIPE_WEBHOOK_READY','STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','SHIPPING_METHODS_JSON','MERCHANT_PRICES_APPROVED'])assert.equal(commerceConfig({...env,[key]:undefined}).stripeEnabled,false,key);

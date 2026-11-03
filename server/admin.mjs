@@ -15,6 +15,7 @@ import {validateSmartbillSettings,smartbillStatus,testSmartbill,smartbillStock,s
 import {omnisendRead,omnisendWrite} from './admin-omnisend.mjs';
 import {inventoryOverview,syncInventory,reconcileStock,assertMappingChange} from './inventory.mjs';
 import {productMedia} from './product-media.mjs';
+import {validateGlsSettings,glsStatus,createGlsLabel,glsLabel} from './gls.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -87,6 +88,9 @@ function validate(kind,input,store){
   const enabled=input.enabled===true,productId=text(input.productId,90),product=store.catalogue.products.find(item=>item.id===productId&&item.status==='published');
   if(enabled&&!product)fail(400,'Aktív upsellhez válassz egy közzétett terméket.');
   data={id,enabled,thresholdMinor:int(input.thresholdMinor,0,100000000),productId:product?.id||'',discountPercent:int(input.discountPercent,1,90),title:text(input.title,120,true),copy:text(input.copy,500,true)};
+ }else if(kind==='setting'&&id==='gls'){
+  if(status!=='published')fail(400,'A GLS-beállítás csak aktív állapotban menthető.');
+  data={id,...validateGlsSettings(input)};
  }else fail(404,'Ismeretlen adattípus.');
  if(['product','category','recipe'].includes(kind))data.seo=validateSeo(input.seo);
  return {...data,status,revision:text(input.revision,100)||'new'};
@@ -96,7 +100,7 @@ async function save(db,user,kind,data,isNew){
  const {status,revision,...payload}=data;
  if(isNew&&(recordDefaults(kind).some(item=>item.id===data.id)||await q(db,'SELECT id FROM store_records WHERE kind=? AND id=?',kind,data.id).first()))fail(409,'Ez az azonosító már létezik.');
  const previous=await q(db,'SELECT revision FROM store_records WHERE kind=? AND id=?',kind,data.id).first();
- if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo','smartbill','upsell'].includes(data.id)))fail(404,'Nem található bejegyzés.');
+ if(!isNew&&(!previous&&!recordDefaults(kind).some(item=>item.id===data.id))&&!(kind==='setting'&&['shipping','seo','smartbill','upsell','gls'].includes(data.id)))fail(404,'Nem található bejegyzés.');
  if(previous&&previous.revision!==revision)fail(409,'Másik mentés óta megváltozott az adat. Frissítsd a listát.');
  if(!previous&&revision!=='seed'&&revision!=='new')fail(409,'Elavult adatverzió.');
  const updated=await q(db,`INSERT INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE (?<>'product' OR NOT EXISTS(SELECT 1 FROM store_records WHERE kind='product' AND id<>? AND json_extract(payload_json,'$.sku')=?))
@@ -108,7 +112,7 @@ async function save(db,user,kind,data,isNew){
 async function overview(db,user,env){
  const [store,orders,customers,subscribers,auditRows]=await Promise.all([
   loadStore(db,{admin:true,env}),
-  all(db,`SELECT o.*,${refundColumns()},c.email,c.full_name,c.phone,p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id ORDER BY o.created_at DESC LIMIT 200`),
+  all(db,`SELECT o.*,${refundColumns()},c.email,c.full_name,c.phone,p.customer_json,ops.fulfillment_status,ops.tracking_url,ops.note,ops.revision AS operation_revision,g.parcel_number AS gls_parcel_number,g.status AS gls_status FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id LEFT JOIN store_order_operations ops ON ops.order_id=o.id LEFT JOIN gls_shipments g ON g.order_id=o.id ORDER BY o.created_at DESC LIMIT 200`),
   all(db,`SELECT c.id,c.email,c.full_name,c.phone,c.created_at,COUNT(o.id) AS order_count FROM customers c LEFT JOIN customer_orders o ON o.user_id=c.id GROUP BY c.id ORDER BY c.created_at DESC LIMIT 200`),
   all(db,'SELECT email,status,created_at,updated_at FROM newsletter_subscribers ORDER BY created_at DESC LIMIT 200'),
   all(db,'SELECT action,entity,entity_id,created_at FROM store_admin_audit ORDER BY created_at DESC LIMIT 50')
@@ -141,7 +145,7 @@ async function upload(request,{db,bucket,user}){
 }
 const csvCell=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';
 export async function handleAdminRequest(request,ctx){
- const {db,user,env={}}=ctx;
+ const {db,user,env={},bucket}=ctx;
  try{
   if(!user?.userId||!user?.email)return json({error:'Jelentkezz be a tulajdonosi fiókkal.'},401);
   if(!isStoreAdmin(user,env))return json({error:'Ehhez a felülethez nincs adminisztrátori jogosultságod.'},403);
@@ -171,6 +175,7 @@ export async function handleAdminRequest(request,ctx){
    if(request.method==='POST'&&parts.length===2&&parts[1]==='stock')return json(await smartbillStock(db,env,await body(request),ctx.fetcher));
    return json({error:'Nem található SmartBill-művelet.'},404);
   }
+  if(parts[0]==='gls'&&request.method==='GET'&&parts.length===1)return json(await glsStatus(db,env));
   if(parts[0]==='inventory'){
    if(request.method==='GET'&&parts.length===1)return json(await inventoryOverview(db,env));
    if(request.method==='GET'&&parts.length===2&&parts[1]==='export'){
@@ -201,6 +206,12 @@ export async function handleAdminRequest(request,ctx){
    const object=await ctx.bucket?.get(invoice.object_key);if(!object)fail(404,'A számlafájl nem érhető el.');
    const name=String(invoice.number).replace(/[^a-zA-Z0-9_-]/g,'_');
    return new Response(object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="szamla-${name}.pdf"`}});
+  }
+  if(parts[0]==='orders'&&parts.length===3&&parts[2]==='gls-label'&&request.method==='POST'){
+   await body(request);const result=await createGlsLabel({db,env,bucket,fetcher:ctx.fetcher,orderId:parts[1]});await audit(db,user,'gls-label','order',parts[1]);return json(result,result.created?201:200);
+  }
+  if(parts[0]==='orders'&&parts.length===3&&parts[2]==='gls-label'&&request.method==='GET'){
+   const label=await glsLabel(db,bucket,parts[1]);return new Response(label.object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="gls-${label.parcelNumber}.pdf"`}});
   }
   if(parts[0]==='media'&&request.method==='POST'&&parts.length===1)return await upload(request,ctx);
   if(parts[0]==='media'&&parts.length===2&&['PUT','DELETE'].includes(request.method)){

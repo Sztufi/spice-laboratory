@@ -1,5 +1,6 @@
 import {refundColumns,refundSummary} from './refunds.mjs';
 import { shippingMethods, shippingQuote } from './shipping.mjs';
+import {resolveGlsLocker} from './gls-lockers.mjs';
 import { seedCatalogue } from '../public/catalogue.mjs';
 import {loadStore,runtimeEnv,assertAvailable,couponQuote} from './store.mjs';
 import { sanitizeCart, cartTotals } from '../public/shop-core.mjs';
@@ -113,6 +114,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       total.totalMinor-=discount?.discountMinor||0;
       const shipping=body.shipping?shippingQuote(shippingMethods(env),{country:body.shipping.country,methodId:body.shipping.shippingMethodId},total.totalMinor):null;
       if(body.shipping&&!shipping)fail(400,'Érvénytelen szállítási mód.');
+      if(shipping?.deliveryType==='gls-locker')shipping.pickupPoint=await resolveGlsLocker(body.shipping?.pickupPoint?.id,shipping.country);
       total.totalMinor+=shipping?.feeMinor||0;
       await ensureCustomer(db,user);
       const previous=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();

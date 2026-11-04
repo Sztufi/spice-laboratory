@@ -199,7 +199,7 @@ async function completeDemoOrder(event) {
   if (submit?.disabled) return;
   if (submit) submit.disabled = true;
   let archived;
-  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId}:undefined,selection.couponCode):{saved:false}; }
+  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId,pickupPoint:selection.customer.pickupPoint}:undefined,selection.couponCode):{saved:false}; }
   catch (error) {
     if (submit) submit.disabled = false;
     $('#cart-content .checkout-error')?.remove();

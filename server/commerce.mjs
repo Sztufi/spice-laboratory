@@ -11,6 +11,7 @@ import {syncInventory,requireFreshInventory} from './inventory.mjs';
 import {publicUpsell,selectedUpsell} from './upsell.mjs';
 import {publicTracking,ensureTrackingLink} from './gls.mjs';
 import {sendOrderConfirmation} from './order-email.mjs';
+import {resolveGlsLocker} from './gls-lockers.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -90,6 +91,11 @@ async function createCheckout(request,ctx,config,input){
  const merchandiseMinor=totals.totalMinor+(upsell?.priceMinor||0);
  const shipping=shippingQuote(config.shippingMethods,{country:customerData.shipping.address.country,methodId:input.shippingMethodId},merchandiseMinor-(discount?.discountMinor||0));if(!shipping)fail(400,'Válassz elérhető szállítási módot a kiválasztott országhoz.');
  const total=merchandiseMinor-(discount?.discountMinor||0)+shipping.feeMinor;
+ if(shipping.deliveryType==='gls-locker'){
+  const point=await resolveGlsLocker(input.customer?.pickupPoint?.id,shipping.country,fetcher);
+  customerData.shipping.pickupPoint=point;
+  shipping.pickupPoint=point;
+ }
  const customerHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({billing:customerData.billing,shipping:customerData.shipping})))),x=>x.toString(16).padStart(2,'0')).join('');
  const fingerprint=JSON.stringify({items,shipping,discount,mode:config.mode,customerHash});
  await customer(db,user);

@@ -10,7 +10,8 @@ export function shippingMethods(env={}) {
    const min=item.deliveryMinDays,max=item.deliveryMaxDays;
    if(!Number.isInteger(min)||!Number.isInteger(max)||min<1||max<min||max>60)return [];
    if(item.freeAboveMinor!==undefined&&(!Number.isSafeInteger(item.freeAboveMinor)||item.freeAboveMinor<0||item.freeAboveMinor>100000000))return [];
-   ids.add(item.id);methods.push({id:item.id,label:item.label.trim(),country:item.country,feeMinor:item.feeMinor,deliveryMinDays:min,deliveryMaxDays:max,...(item.freeAboveMinor!==undefined?{freeAboveMinor:item.freeAboveMinor}:{})});
+   if(item.deliveryType!==undefined&&!['home','gls-locker'].includes(item.deliveryType))return [];
+   ids.add(item.id);methods.push({id:item.id,label:item.label.trim(),country:item.country,feeMinor:item.feeMinor,deliveryMinDays:min,deliveryMaxDays:max,...(item.deliveryType?{deliveryType:item.deliveryType}:{}),...(item.freeAboveMinor!==undefined?{freeAboveMinor:item.freeAboveMinor}:{})});
   }return methods;
  }catch{return [];}
 }

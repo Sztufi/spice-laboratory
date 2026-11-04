@@ -12,6 +12,23 @@ function mockStripe(){let calls=0,params;const session={id:'cs_test_123',url:'ht
 async function sign(event,secret=env.STRIPE_WEBHOOK_SECRET,t=Math.floor(Date.now()/1000)){const raw=JSON.stringify(event),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${t}.${raw}`)));return {raw,signature:`t=${t},v1=${Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('')}`};}
 async function webhook(ctx,event,options={}){const signed=await sign(event,options.secret,options.timestamp);return handleCommerceRequest(new Request(origin+'/api/commerce/stripe-webhook',{method:'POST',headers:{'stripe-signature':signed.signature},body:options.body??signed.raw}),ctx);}
 const checkoutBody=()=>({checkoutMode:'account',country:'HU',shippingMethodId:'hu-home',requestId:crypto.randomUUID(),items:[{id:'fries-salt',quantity:2,priceMinor:1}],totalMinor:1,customer:{email:'alice@example.com',shipping:{name:'Alice Example',phone:'+3612345678',address:{country:'HU',postalCode:'1111',city:'Budapest',line1:'Példa utca 1.',line2:''}},billingSame:true,termsAccepted:true,privacyAccepted:true}});
+test('locker checkout requires an official HU locker and persists canonical point data with the 1400 HUF price',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe();
+ const point={id:'HU-LOCKER-1',name:'GLS tesztautomata',type:'parcel-locker',features:['delivery'],contact:{countryCode:'HU',postalCode:'1111',city:'Budapest',address:'Teszt utca 2'}};
+ const lockerEnv={...env,SHIPPING_METHODS_JSON:JSON.stringify([{id:'hu-locker',label:'GLS csomagautomata',deliveryType:'gls-locker',country:'HU',feeMinor:140000,deliveryMinDays:2,deliveryMaxDays:2}])};
+ const ctx={db,env:lockerEnv,user:alice,fetcher:async(url,options)=>url.includes('/data/deliveryPoints/')?Response.json({items:[point]}):mock.fetcher(url,options)};
+ const input={...checkoutBody(),shippingMethodId:'hu-locker'};
+ assert.equal((await call(ctx,'checkout','POST',input)).status,400);
+ input.customer.pickupPoint={id:'fake'};assert.equal((await call(ctx,'checkout','POST',input)).status,400);
+ input.customer.pickupPoint={id:point.id,name:'forged name',address:'forged address'};
+ assert.equal((await call(ctx,'checkout','POST',input)).status,201);
+ const row=sqlite.prepare('SELECT * FROM payment_checkouts').get();
+ assert.equal(JSON.parse(row.shipping_json).feeMinor,140000);
+ assert.equal(JSON.parse(row.customer_json).shipping.pickupPoint.name,point.name);
+ assert.equal(JSON.parse(row.customer_json).billing.address.line1,'Példa utca 1.');
+ assert.equal(mock.params.get('shipping_options[0][shipping_rate_data][fixed_amount][amount]'),'140000');
+ point.type='parcel-shop';assert.equal((await call(ctx,'checkout','POST',{...input,requestId:crypto.randomUUID()})).status,400);
+});
 test('checkout preserves validated customer addresses after Stripe completes and rejects changed details on a reused attempt',async()=>{
  const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher},input=checkoutBody();
  assert.equal((await call(ctx,'checkout','POST',{...input,customer:undefined})).status,400);

@@ -1,6 +1,7 @@
 import {styleIcons} from './brand-icons.mjs';
 import {formatMoney} from './money.mjs';
 import {shippingQuote,SHIPPING_COUNTRIES} from './shipping-core.mjs';
+import {mountLockerPicker} from './locker-picker.mjs';
 const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=v=>formatMoney(v,'HUF'),blank=()=>({country:'HU',postalCode:'',city:'',line1:'',line2:''});
 const selection={country:'HU',methodId:'',checkoutMode:'guest',couponCode:'',discountMinor:0,couponSubtotal:0,upsellProductId:'',customer:{email:'',shipping:{name:'',phone:'',address:blank()},billingSame:true,billing:{name:'',address:blank()},termsAccepted:false,privacyAccepted:false}};
@@ -19,6 +20,7 @@ export function renderCheckout({totals,config,onPay,onAccount,onCoupon}){
  if(u)content.querySelector('#checkout-form').insertAdjacentHTML('beforeend',styleIcons(`<section class="checkout-upsell" aria-label="Egyszeri ajánlat"><p class="section-kicker">CSAK MOST, A PÉNZTÁRBAN.</p><div class="checkout-upsell-card"><img src="${h(u.product.image)}" alt="${h(u.product.name)}"><div><h3>${h(u.title)}</h3><p>${h(u.copy)}</p><strong>${h(u.product.name)} · <del>${money(u.product.regularPriceMinor)}</del> ${money(u.product.priceMinor)}</strong></div><button class="${chosen?'secondary-button':'primary-button yellow'}" type="button" data-upsell-toggle>${chosen?'MÉGSEM KÉREM':'KÉREM +'}</button></div></section>`));
  footer.hidden=false;const blocked=state.checkoutMode==='account'&&!config.accountAvailable;footer.innerHTML=styleIcons(`<div class="subtotal-row"><span>${quote?'Összesen':'Termékek összesen'}</span><strong>${money(total+(quote?.feeMinor||0))}</strong></div>${demo?`<button class="primary-button yellow" type="submit" form="checkout-form"${blocked?' disabled':''}>PRÓBAVÁSÁRLÁS BEFEJEZÉSE ↗</button>`:`<button class="primary-button yellow" id="stripe-pay" type="button"${!quote||blocked?' disabled':''}>TOVÁBB A FIZETÉSHEZ ↗</button><p class="demo-note">A bankkártyaadataidat a Stripe kezeli.</p>`}`);
  const form=content.querySelector('#checkout-form'),rerender=focus=>{renderCheckout({totals,config,onPay,onAccount,onCoupon});content.querySelector(focus)?.focus({preventScroll:true});};
+ mountLockerPicker({form,footer,selection,quote});
  // Guest checkout is the default, not an extra decision before entering contact details.
  if(!config.accountAvailable){selection.checkoutMode='guest';form.querySelector('.checkout-account-note')?.remove();form.querySelector('.checkout-choice')?.remove();form.insertAdjacentHTML('afterbegin','<p class="checkout-login-prompt">Van már fiókod? <button type="button" id="checkout-login" class="text-button">Belépés</button><br><small>Fiók nélkül is vásárolhatsz.</small></p>');}
  for(const el of form.querySelectorAll('[autocomplete]')){if(el.id.startsWith('shipping-'))el.autocomplete='section-shipping shipping '+el.autocomplete;else if(el.id.startsWith('billing-'))el.autocomplete='section-billing billing '+el.autocomplete;}

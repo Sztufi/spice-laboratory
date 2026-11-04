@@ -34,11 +34,11 @@ function splitAddress(line){
  if(!match||!match[1])fail(400,'A címzett utcájából nem állapítható meg biztosan a házszám. A GLS-címkéhez a rendelésnél külön utca és házszám szükséges.');
  return {street:match[1].trim(),houseNumber:match[2],houseNumberInfo:match[3]||''};
 }
-function contact(name,phone,email){if(!name||!phone||!email)fail(400,'A GLS-címkéhez címzettnév, telefonszám és e-mail-cím szükséges.');return {Name:name,Phone:phone,Email:email};}
+function contact(name,phone,email){if(!name||!phone||!email)fail(400,'A GLS-címkéhez címzettnév, telefonszám és e-mail-cím szükséges.');return {ContactName:name,ContactPhone:phone,ContactEmail:email};}
 function address(value,recipient,phone,email){
  const a=value?.address||value||{},parts=splitAddress(a.line1);
  if(!a.city||!a.postal_code||!a.country)fail(400,'A GLS-címkéhez teljes kézbesítési cím szükséges.');
- return {Name:recipient,Street:parts.street,HouseNumber:parts.houseNumber,HouseNumberInfo:parts.houseNumberInfo,City:String(a.city),ZipCode:String(a.postal_code),CountryIsoCode:String(a.country).toUpperCase(),Contact:contact(recipient,phone,email)};
+ return {Name:recipient,Street:parts.street,HouseNumber:parts.houseNumber,HouseNumberInfo:parts.houseNumberInfo,City:String(a.city),ZipCode:String(a.postal_code),CountryIsoCode:String(a.country).toUpperCase(),...contact(recipient,phone,email)};
 }
 function bytes(labels){
  if(Array.isArray(labels)&&labels.every(value=>Number.isInteger(value)&&value>=0&&value<256))return new Uint8Array(labels);
@@ -67,8 +67,15 @@ export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId}){
   const recipient=shipping?.name||billing?.name||order.full_name;
   const phone=shipping?.phone||billing?.phone||order.phone;
   const email=billing?.email||order.email;
-  const pickup={Name:config.senderName,Street:config.senderStreet,HouseNumber:config.senderHouseNumber,City:config.senderCity,ZipCode:config.senderPostalCode,CountryIsoCode:config.senderCountry,Contact:contact(config.senderContactName,config.senderContactPhone,config.senderContactEmail)};
+  const pickup={Name:config.senderName,Street:config.senderStreet,HouseNumber:config.senderHouseNumber,City:config.senderCity,ZipCode:config.senderPostalCode,CountryIsoCode:config.senderCountry,...contact(config.senderContactName,config.senderContactPhone,config.senderContactEmail)};
   const parcel={ClientNumber:Number(env.GLS_CLIENT_NUMBER),ClientReference:order.number,PickupAddress:pickup,DeliveryAddress:address(shipping,recipient,phone,email),Content:'Fűszerek',Weight:config.boxWeightGrams/1000};
+  if(shipping?.pickupPoint){
+   const point=shipping.pickupPoint;
+   if(point.type!=='parcel-locker'||point.country!=='HU'||!point.id)fail(400,'Hibás GLS automata-adatok.');
+   parcel.FinalDeliveryAddress=parcel.DeliveryAddress;
+   parcel.DeliveryAddress={Name:point.name,Street:point.address,City:point.city,ZipCode:point.postalCode,CountryIsoCode:point.country,...contact(recipient,phone,email)};
+   parcel.ServiceList=[{Code:'PSD',PSDParameter:{StringValue:point.id}}];
+  }
   if(order.kind==='cod'){if(!config.codEnabled)fail(409,'Az utánvét a GLS-beállításokban nincs engedélyezve.');Object.assign(parcel,{CODAmount:Math.round(order.total_minor/100),CODCurrency:'HUF',CODReference:order.number});}
   const payload={Username:env.GLS_USERNAME,Password:await passwordBytes(env.GLS_PASSWORD),ParcelList:[parcel],WebshopEngine:'Spice Laboratory',PrintPosition:1,ShowPrintDialog:false,TypeOfPrinter:config.printerType};
   let response;try{response=await fetcher(endpoint(config.country,'PrintLabels'),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});}catch{fail(502,'A GLS nem válaszolt. Próbáld újra később.');}

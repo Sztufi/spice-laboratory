@@ -1,7 +1,6 @@
 import {seedCatalogue} from '../public/catalogue.mjs';
 import {recipeSeeds} from '../public/recipe-data.mjs';
 import {categoryPages as initialCategories} from '../public/page-data.mjs';
-import {resolveConfig,sourceKey,stockDate,inventoryProducts,reservationPredicate} from './inventory-model.mjs';
 import {verifiedSkus} from './product-skus.mjs';
 export const query=(db,sql,...args)=>db.prepare(sql).bind(...args);
 export const all=async(db,sql,...args)=>(await query(db,sql,...args).all()).results||[];
@@ -24,20 +23,37 @@ export function adminPrincipal(sitesUser,googleUser,env={}){
 export const defaultCategories=seedCatalogue.categories.map(category=>({...initialCategories.find(item=>item.id===category.id),...category,status:'published',parentId:'',revision:'seed'}));
 const initial={product:seedCatalogue.products.map(product=>({...product,sku:verifiedSkus[product.id]||'',status:'published',manageStock:false,stockQuantity:0,revision:'seed'})),category:defaultCategories,ingredient:seedCatalogue.ingredients.map(item=>({...item,status:'published',revision:'seed'})),recipe:recipeSeeds,coupon:[],setting:[],media:[]};
 export async function loadStore(db,{admin=false,env={},withInventory=true}={}){
- const records=db?await all(db,'SELECT kind,id,payload_json,status,revision,updated_at FROM store_records ORDER BY created_at,id LIMIT 5000'):[];
+ let records=db?await all(db,'SELECT kind,id,payload_json,status,revision,updated_at FROM store_records ORDER BY created_at,id LIMIT 5000'):[];
+ if(db&&records.some(r=>r.kind==='product')&&!records.some(r=>r.kind==='system'&&r.id==='manual-stock-v1')){
+  const old=records.find(r=>r.kind==='setting'&&r.id==='smartbill'&&r.status==='published');
+  const linked=(old?JSON.parse(old.payload_json).stockSyncEnabled:undefined)??(env.SMARTBILL_STOCK_SYNC_ENABLED==='true');
+  // One atomic, idempotent cutover from locally stored snapshots. No provider request.
+  // Keep existing manual counts; reservations are deducted later, never twice.
+  if(linked||env.SMARTBILL_STOCK_SYNC_ENABLED!==undefined||(old&&JSON.parse(old.payload_json).stockSyncEnabled!==undefined)){
+   const guard="NOT EXISTS(SELECT 1 FROM store_records WHERE kind='system' AND id='manual-stock-v1')";
+   const ops=[];
+   if(linked)ops.push(query(db,`UPDATE store_records AS p SET payload_json=json_set(payload_json,'$.manageStock',json('true'),'$.stockQuantity',COALESCE((SELECT MAX(0,s.quantity-COALESCE((SELECT SUM(m.quantity) FROM store_stock_movements m WHERE m.product_id=p.id AND m.smartbill_confirmed_at IS NULL),0)-COALESCE(json_extract(p.payload_json,'$.safetyStock'),0)) FROM store_smartbill_stock s JOIN store_inventory_sync i ON i.id='smartbill' AND i.generation=s.generation AND i.source_key=s.source_key WHERE s.product_id=p.id AND s.sku=json_extract(p.payload_json,'$.sku') AND s.status='ok'),0)),revision=lower(hex(randomblob(16))),updated_at=? WHERE p.kind='product' AND p.status!='archived' AND COALESCE(json_extract(p.payload_json,'$.manageStock'),0)=0 AND ${guard}`,new Date().toISOString()));
+   const stamp=new Date().toISOString();
+   ops.push(query(db,"INSERT OR IGNORE INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) VALUES('system','manual-stock-v1','{}','published','v1',?,?)",stamp,stamp));await db.batch(ops);
+   records=await all(db,'SELECT kind,id,payload_json,status,revision,updated_at FROM store_records ORDER BY created_at,id LIMIT 5000');
+  }
+ }
  const merged={};
  for(const kind of Object.keys(initial)){
   const map=new Map(initial[kind].map(item=>[item.id,{...item}]));
   for(const row of records.filter(item=>item.kind===kind))map.set(row.id,{...JSON.parse(row.payload_json),id:row.id,status:row.status,revision:row.revision,updatedAt:row.updated_at});
   merged[kind]=[...map.values()].filter(item=>admin||item.status==='published');
  }
- const inventoryConfig=resolveConfig(merged.setting.find(item=>item.id==='smartbill'),env);
- if(db&&withInventory&&inventoryConfig.stockSync)merged.product=await inventoryProducts(db,merged.product,inventoryConfig);
+ if(db&&withInventory){
+  const held=await all(db,'SELECT product_id,SUM(quantity) AS n FROM store_stock_reservations WHERE expires_at>? GROUP BY product_id',Math.floor(Date.now()/1000));
+  const reserved=new Map(held.map(r=>[r.product_id,r.n]));
+  merged.product=merged.product.map(p=>p.manageStock?{...p,availableQuantity:Math.max(0,p.stockQuantity-(reserved.get(p.id)||0))}:p);
+ }
  const validCategories=new Set(merged.category.map(item=>item.id));
  const products=merged.product.filter(product=>admin||product.categories.some(id=>validCategories.has(id))).map(product=>{
   const {revision,status,stockQuantity,inventory,availableQuantity,stockSource,safetyStock,lowStockThreshold,...rest}=product;
   const price=product.salePriceMinor>0&&product.salePriceMinor<product.priceMinor?product.salePriceMinor:product.priceMinor;
-  return admin?product:{...rest,priceMinor:price,regularPriceMinor:product.priceMinor,inStock:!product.manageStock||(availableQuantity??stockQuantity)>0,stockStatus:inventory?(['ok','low','zero'].includes(inventory.status)?'verified':'unverified'):undefined};
+  return admin?product:{...rest,...(product.manageStock?{availableQuantity:availableQuantity??stockQuantity}:{}),priceMinor:price,regularPriceMinor:product.priceMinor,inStock:!product.manageStock||(availableQuantity??stockQuantity)>0,stockStatus:inventory?(['ok','low','zero'].includes(inventory.status)?'verified':'unverified'):undefined};
  });
  const catalogue={...seedCatalogue,products,categories:merged.category.map(item=>{if(admin)return item;const {revision,status,updatedAt,...rest}=item;return rest;}),ingredients:merged.ingredient.map(item=>({id:item.id,label:item.label,...(admin?{revision:item.revision,status:item.status}:{})}))};
  return {catalogue,recipes:merged.recipe,coupons:merged.coupon,settings:merged.setting,media:merged.media,records:admin?merged:undefined};
@@ -60,22 +76,10 @@ export function imageUrl(value){
  fail(400,'HTTPS-képcím vagy feltöltött kép szükséges.');
 }
 export function assertAvailable(items,catalogue){
- for(const item of items){const product=catalogue.products.find(p=>p.id===item.id);if(!product||product.inStock===false)fail(409,'Egy kiválasztott termék már nem elérhető. Frissítsd a kosarat.');}
+ for(const item of items){const product=catalogue.products.find(p=>p.id===item.id);if(!product||product.inStock===false||(Number.isInteger(product.availableQuantity)&&item.quantity>product.availableQuantity))fail(409,'Egy kiválasztott termék már nem elérhető. Frissítsd a kosarat.');}
 }
 export async function reserveStock(db,checkoutId,items,{env={}}={}){
- const expires=Math.floor(Date.now()/1000)+3900,now=new Date().toISOString();
- const setting=await query(db,"SELECT payload_json FROM store_records WHERE kind='setting' AND id='smartbill' AND status='published'").first();
- const config=resolveConfig(setting?JSON.parse(setting.payload_json):{},env);
- const statements=[];
- if(config.stockSync){
-  for(const item of items)statements.push(query(db,`INSERT INTO store_stock_reservations(checkout_id,product_id,quantity,expires_at)
-   SELECT ?,?,?,? FROM store_records p WHERE p.kind='product' AND p.id=? AND p.status='published' AND ${reservationPredicate}
-   ON CONFLICT(checkout_id,product_id) DO UPDATE SET expires_at=excluded.expires_at`,checkoutId,item.id,item.quantity,expires,item.id,sourceKey(config),new Date(Date.now()-config.maxStockAgeSeconds*1000).toISOString(),stockDate(),checkoutId,Math.floor(Date.now()/1000),item.quantity));
-  if(statements.length)await db.batch(statements);
-  const reserved=await all(db,'SELECT product_id,quantity FROM store_stock_reservations WHERE checkout_id=?',checkoutId);
-  if(items.some(item=>!reserved.some(r=>r.product_id===item.id&&r.quantity===item.quantity))){await query(db,'DELETE FROM store_stock_reservations WHERE checkout_id=?',checkoutId).run();fail(409,'A készlet megváltozott vagy még nem ellenőrzött. Frissítsd a kosarat.');}
-  return;
- }
+ const expires=Math.floor(Date.now()/1000)+3900,statements=[];
  for(const item of items)statements.push(query(db,`INSERT INTO store_stock_reservations(checkout_id,product_id,quantity,expires_at)
  SELECT ?,?,?,? FROM store_records p WHERE p.kind='product' AND p.id=? AND p.status='published' AND json_extract(p.payload_json,'$.manageStock')=1
  AND json_extract(p.payload_json,'$.stockQuantity')-COALESCE((SELECT SUM(r.quantity) FROM store_stock_reservations r WHERE r.product_id=p.id AND r.checkout_id<>? AND r.expires_at>?),0)>=?
@@ -91,7 +95,7 @@ export function stockSettlementStatements(db,row){
  for(const item of JSON.parse(row.items_json)){
   statements.push(query(db,`UPDATE store_records SET payload_json=json_set(payload_json,'$.stockQuantity',MAX(0,json_extract(payload_json,'$.stockQuantity')-?)),revision=?,updated_at=?
  WHERE kind='product' AND id=? AND json_extract(payload_json,'$.manageStock')=1 AND NOT EXISTS(SELECT 1 FROM store_stock_movements WHERE order_id=? AND product_id=?)`,item.quantity,crypto.randomUUID(),new Date().toISOString(),item.id,row.id,item.id));
-  statements.push(query(db,"INSERT INTO store_stock_movements(order_id,product_id,quantity,created_at,sku) SELECT ?,?,?,?,COALESCE(NULLIF(?,''),json_extract(payload_json,'$.sku'),'') FROM store_records WHERE kind='product' AND id=? AND (json_extract(payload_json,'$.manageStock')=1 OR EXISTS(SELECT 1 FROM store_smartbill_stock WHERE product_id=?)) ON CONFLICT(order_id,product_id) DO NOTHING",row.id,item.id,item.quantity,new Date().toISOString(),item.sku||'',item.id,item.id));
+  statements.push(query(db,"INSERT INTO store_stock_movements(order_id,product_id,quantity,created_at,sku) SELECT ?,?,?,?,COALESCE(NULLIF(?,''),json_extract(payload_json,'$.sku'),'') FROM store_records WHERE kind='product' AND id=? AND json_extract(payload_json,'$.manageStock')=1 ON CONFLICT(order_id,product_id) DO NOTHING",row.id,item.id,item.quantity,new Date().toISOString(),item.sku||'',item.id));
  }
  statements.push(query(db,'DELETE FROM store_stock_reservations WHERE checkout_id=?',row.id));return statements;
 }

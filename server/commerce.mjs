@@ -7,7 +7,6 @@ import { cartTotals } from '../public/shop-core.mjs';
 import { assertSameOrigin } from './account.mjs';
 import {REFUND_EVENTS,syncRefundEvent} from './refunds.mjs';
 import {handleWithdrawal,withdrawalMailReady} from './withdrawals.mjs';
-import {syncInventory,requireFreshInventory} from './inventory.mjs';
 import {publicUpsell,selectedUpsell} from './upsell.mjs';
 import {publicTracking,ensureTrackingLink} from './gls.mjs';
 import {sendOrderConfirmation} from './order-email.mjs';
@@ -172,9 +171,9 @@ export async function handleCommerceRequest(request,ctx){
  if(request.method==='GET'&&path.startsWith('tracking/'))return json(await publicTracking(db,env,path.slice('tracking/'.length),ctx.fetcher));
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');
  if(path==='stock'&&request.method==='GET'){
-  const sync=await syncInventory(db,env,{fetcher:ctx.fetcher}),{catalogue}=await loadStore(db,{env});
+  const {catalogue}=await loadStore(db,{env});
   if(ctx.background)ctx.background(()=>dispatchRestock(ctx,catalogue));else await dispatchRestock(ctx,catalogue);
-  return json({enabled:sync.enabled,products:catalogue.products.map(p=>({id:p.id,inStock:p.inStock,stockStatus:p.stockStatus}))});
+  return json({enabled:true,products:catalogue.products.map(p=>({id:p.id,inStock:p.inStock,stockStatus:p.stockStatus}))});
  }
  if(path==='stripe-webhook'&&request.method==='POST'){
  const raw=await readLimited(request,262144);const event=await verifyStripeEvent(raw,request.headers.get('stripe-signature'),env.STRIPE_WEBHOOK_SECRET);
@@ -206,7 +205,6 @@ export async function handleCommerceRequest(request,ctx){
   const input=await body(request);if(!['guest','account'].includes(input?.checkoutMode))fail(400,'Válassz vásárlási módot.');
   const principal=input.checkoutMode==='guest'?await guestCheckoutAccess(request,db):user;
   if(!principal?.userId||(input.checkoutMode==='account'&&!principal.email))fail(401,input.checkoutMode==='guest'?'A vendégpénztárhoz engedélyezd a szükséges sütiket, majd próbáld újra.':'A fiókkal vásárláshoz jelentkezz be.');
-  if(config.stripeEnabled&&config.mode==='live')await requireFreshInventory(db,env,ctx.fetcher);
   const store=await loadStore(db,{env});config.upsell=publicUpsell(store.settings,store.catalogue);return await createCheckout(request,{...ctx,user:principal,catalogue:store.catalogue},config,input);
  }
  if(path==='claim-order'&&request.method==='POST'){

@@ -13,7 +13,7 @@ export function validateSmartbillSettings(input){
  if(!/^(?:RO)?[0-9]{2,20}$/.test(companyVatCode)||/[\r\n\t]/.test(seriesName+warehouseName))fail(400,'Ellenőrizd a CIF, sorozat és raktár értékét.');
  if(['token','apiKey','apiToken','password'].some(key=>key in input))fail(400,'Az API-token kizárólag titkos szerverbeállításban tárolható.');
  if('stockSyncEnabled' in input&&typeof input.stockSyncEnabled!=='boolean')fail(400,'Hibás készletszinkron-beállítás.');
- return {email,companyVatCode,seriesName,warehouseName,...('stockSyncEnabled' in input?{stockSyncEnabled:input.stockSyncEnabled}:{})};
+ return {email,companyVatCode,seriesName,warehouseName,...('stockSyncEnabled' in input?{stockSyncEnabled:false}:{})};
 }
 
 export async function providerGet(config,env,path,params,fetcher=fetch){

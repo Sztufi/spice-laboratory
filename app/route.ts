@@ -8,7 +8,6 @@ import {seoEndpoint,seoSetting,seoRedirect} from '../server/seo.mjs';
 import {staticImageResponse} from '../server/image-response.mjs';
 import {googleCustomer} from '../server/google-auth.mjs';
 import {magicCustomer} from '../server/magic-auth.mjs';
-import {syncInventory} from '../server/inventory.mjs';
 import {dispatchRestock} from '../server/restock.mjs';
 import {after} from 'next/server';
 export const dynamic = 'force-dynamic';
@@ -30,7 +29,6 @@ export async function GET(request: Request) {
   return new Response(adminPage(),{headers});
  }
  try{
-  if(url.pathname==='/'||url.pathname==='/termekek'||url.pathname.startsWith('/termek/')||url.pathname.startsWith('/kategoria/'))await syncInventory(env.DB,env);
   const store=await loadStore(env.DB,{env});
   after(async()=>{try{await dispatchRestock({db:env.DB,env},store.catalogue);}catch{console.error('Restock queue processing failed');}});
   const shipping=store.settings.find((item:{id:string;methods:unknown})=>item.id==='shipping');

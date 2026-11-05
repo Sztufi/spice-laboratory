@@ -2,7 +2,7 @@ import {brandIcon} from './brand-icons.mjs';
 import {styleIcons} from './brand-icons.mjs';
 import { productCard } from './product-markup.mjs';
 import { categoryPath } from './page-data.mjs';
-import { renderCheckout, checkoutSelection, shippingOverview } from './checkout.mjs';
+import { renderCheckout, checkoutSelection, shippingOverview, prepareCheckoutProfile } from './checkout.mjs';
 import { commerceApi } from './commerce.mjs';
 import { formatMoney } from './money.mjs';
 import {purchaseQuantity} from './product-purchase.mjs';
@@ -180,17 +180,22 @@ function showCart() {
   openDialog('cart-dialog');
 }
 
-function showCheckout() {
+let checkoutRead=0,checkoutConfig=null;
+async function showCheckout() {
  const totals=cartTotals(cart,catalogue.products);if(!totals.count){renderCart();return;}
  cartView='checkout';
- renderCheckout({totals,config:getCommerceConfig(),onPay:selection=>startStripeCheckout(cart,selection),onAccount:()=>document.querySelector('#open-account').click(),onCoupon:code=>commerceApi('coupon-quote',{method:'POST',body:JSON.stringify({code,items:cart})})});
+ const read=++checkoutRead;checkoutConfig=null;
+ $('#cart-content').textContent='Rendelési adatok betöltése…';$('#cart-footer').hidden=true;
+ try{const config=await commerceApi('config?checkout=1');if(read!==checkoutRead||cartView!=='checkout')return;checkoutConfig=config;prepareCheckoutProfile(config.profile);}
+ catch{if(read!==checkoutRead||cartView!=='checkout')return;$('#cart-content').innerHTML='<p role="alert">A rendelési adatokat nem sikerült betölteni.</p><button type="button" class="secondary-button" data-action="checkout">Újrapróbálás</button>';return;}
+ renderCheckout({totals,config:checkoutConfig,onPay:selection=>startStripeCheckout(cart,selection),onAccount:()=>document.querySelector('#open-account').click(),onCoupon:code=>commerceApi('coupon-quote',{method:'POST',body:JSON.stringify({code,items:cart})})});
  $('#cart-content').scrollTop=0;
 }
 
 async function completeDemoOrder(event) {
   event.preventDefault();
   const { count, totalMinor:subtotalMinor } = cartTotals(cart, catalogue.products);
-  const config=getCommerceConfig(),offer=config.upsell;
+  const config=checkoutConfig;if(!config)return;const offer=config.upsell;
   let selection=checkoutSelection(config,subtotalMinor);
   const upsellMinor=selection.upsellProductId&&offer?.enabled&&offer.productId===selection.upsellProductId?offer.product?.priceMinor||0:0;
   selection=checkoutSelection(config,subtotalMinor,upsellMinor);const totalMinor=subtotalMinor+upsellMinor-selection.discountMinor+(selection.quote?.feeMinor||0);
@@ -199,7 +204,7 @@ async function completeDemoOrder(event) {
   if (submit?.disabled) return;
   if (submit) submit.disabled = true;
   let archived;
-  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId,pickupPoint:selection.customer.pickupPoint}:undefined,selection.couponCode):{saved:false}; }
+  try { archived = selection.checkoutMode==='account'?await archiveDemoOrder(cart,selection.quote?{country:selection.country,shippingMethodId:selection.methodId,pickupPoint:selection.customer.pickupPoint}:undefined,selection.couponCode,selection.customer):{saved:false}; }
   catch (error) {
     if (submit) submit.disabled = false;
     $('#cart-content .checkout-error')?.remove();

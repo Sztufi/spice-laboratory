@@ -6,6 +6,21 @@ const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt
 const money=v=>formatMoney(v,'HUF'),blank=()=>({country:'HU',postalCode:'',city:'',line1:'',line2:''});
 const selection={country:'HU',methodId:'',checkoutMode:'guest',couponCode:'',discountMinor:0,couponSubtotal:0,upsellProductId:'',customer:{email:'',shipping:{name:'',phone:'',address:blank()},billingSame:true,billing:{name:'',address:blank()},termsAccepted:false,privacyAccepted:false}};
 let wasAuthenticated=false;
+let owner=undefined,previousDefaults=null;
+export function prepareCheckoutProfile(profile){
+ const address=src=>Object.fromEntries(Object.keys(blank()).map(k=>[k,src?.[k]||(k==='country'?'HU':'')]));
+ const s=profile?.addresses?.shipping,b=profile?.addresses?.billing;
+ const shipping={name:s?.name||profile?.name||'',phone:profile?.phone||'',address:address(s)};
+ const billing={name:b?.name||shipping.name,address:address(b)};
+ const defaults={email:profile?.email||'',shipping,billing,billingSame:!b||(!b.name&&!b.line1&&!b.city&&!b.postalCode)||(billing.name===shipping.name&&JSON.stringify(billing.address)===JSON.stringify(shipping.address)),termsAccepted:false,privacyAccepted:false};
+ const identity=profile?.ownerId||null;
+ if(owner!==identity){selection.customer=structuredClone(defaults);selection.methodId='';previousDefaults=null;}
+ else if(previousDefaults){
+  const merge=(draft,old,next)=>{for(const key of Object.keys(next)){if(typeof next[key]==='object')merge(draft[key],old[key],next[key]);else if(draft[key]===old[key])draft[key]=next[key];}};
+  merge(selection.customer,previousDefaults,defaults);
+ }
+ owner=identity;previousDefaults=defaults;
+}
 const input=(id,label,value,attrs='')=>`<label for="${id}">${label}<input id="${id}" name="${id}" value="${h(value)}" ${attrs}></label>`;
 function address(prefix,address,countries,withName=false){return `${withName?input(`${prefix}-name`,'Teljes név',selection.customer.shipping.name,'required autocomplete="name"'):''}<div class="form-row">${input(`${prefix}-postal`,'Irányítószám',address.postalCode,'required autocomplete="postal-code"')}${input(`${prefix}-city`,'Település',address.city,'required autocomplete="address-level2"')}</div>${input(`${prefix}-line1`,'Utca, házszám',address.line1,'required autocomplete="address-line1"')}${input(`${prefix}-line2`,'Emelet, ajtó, egyéb (opcionális)',address.line2,'autocomplete="address-line2"')}<label for="${prefix}-country">Ország<select id="${prefix}-country" name="${prefix}-country" required autocomplete="country">${countries.map(c=>`<option value="${h(c.code)}"${c.code===address.country?' selected':''}>${h(c.label)}</option>`).join('')}</select></label>`;}
 export function checkoutSelection(config,subtotal,upsellMinor=0){const auth=config.accountAvailable===true;if(auth)selection.checkoutMode='account';else if(wasAuthenticated)selection.checkoutMode='guest';wasAuthenticated=auth;if(selection.couponSubtotal!==subtotal){selection.couponCode='';selection.discountMinor=0;selection.couponSubtotal=subtotal;}selection.country=selection.customer.shipping.address.country;const methods=(config.shippingMethods||[]).filter(x=>x.country===selection.country);if(!methods.some(x=>x.id===selection.methodId))selection.methodId=methods[0]?.id||'';return {...selection,customer:structuredClone(selection.customer),quote:shippingQuote(methods,selection,subtotal-selection.discountMinor+upsellMinor)};}
@@ -21,6 +36,7 @@ export function renderCheckout({totals,config,onPay,onAccount,onCoupon}){
  footer.hidden=false;const blocked=state.checkoutMode==='account'&&!config.accountAvailable;footer.innerHTML=styleIcons(`<div class="subtotal-row"><span>${quote?'Összesen':'Termékek összesen'}</span><strong>${money(total+(quote?.feeMinor||0))}</strong></div>${demo?`<button class="primary-button yellow" type="submit" form="checkout-form"${blocked?' disabled':''}>PRÓBAVÁSÁRLÁS BEFEJEZÉSE ↗</button>`:`<button class="primary-button yellow" id="stripe-pay" type="button"${!quote||blocked?' disabled':''}>TOVÁBB A FIZETÉSHEZ ↗</button><p class="demo-note">A bankkártyaadataidat a Stripe kezeli.</p>`}`);
  const form=content.querySelector('#checkout-form'),rerender=focus=>{renderCheckout({totals,config,onPay,onAccount,onCoupon});content.querySelector(focus)?.focus({preventScroll:true});};
  mountLockerPicker({form,footer,selection,quote});
+ if(config.accountAvailable&&config.profile){form.querySelector('#contact-email').readOnly=true;const note=form.querySelector('.checkout-account-note');if(note)note.textContent='A mentett fiókadataidat betöltöttük. A hiányzó adatokat a rendelés folytatásakor mentjük a fiókodba.';}
  // Guest checkout is the default, not an extra decision before entering contact details.
  if(!config.accountAvailable){selection.checkoutMode='guest';form.querySelector('.checkout-account-note')?.remove();form.querySelector('.checkout-choice')?.remove();form.insertAdjacentHTML('afterbegin','<p class="checkout-login-prompt">Van már fiókod? <button type="button" id="checkout-login" class="text-button">Belépés</button><br><small>Fiók nélkül is vásárolhatsz.</small></p>');}
  for(const el of form.querySelectorAll('[autocomplete]')){if(el.id.startsWith('shipping-'))el.autocomplete='section-shipping shipping '+el.autocomplete;else if(el.id.startsWith('billing-'))el.autocomplete='section-billing billing '+el.autocomplete;}

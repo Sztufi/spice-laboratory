@@ -124,10 +124,10 @@ export function openAccount(tab='profile'){
 }
 export function clearFavoritesFilter(){favoriteOnly=false;const params=new URLSearchParams(location.search);if(params.has('favorites')){params.delete('favorites');history.replaceState(null,'',location.pathname+(params.size?'?'+params:'')+location.hash);}emit();}
 let checkoutRequest=null;
-export async function archiveDemoOrder(items,shipping,couponCode){
- const fingerprint=JSON.stringify({items,shipping,couponCode});
+export async function archiveDemoOrder(items,shipping,couponCode,customer){
+ const fingerprint=JSON.stringify({items,shipping,couponCode,customer});
  if(!checkoutRequest||checkoutRequest.fingerprint!==fingerprint)checkoutRequest={fingerprint,id:crypto.randomUUID()};
- const result=await api('/demo-orders','POST',{requestId:checkoutRequest.id,items,shipping,couponCode});
+ const result=await api('/demo-orders','POST',{requestId:checkoutRequest.id,items,shipping,couponCode,customer});
  checkoutRequest=null;
  try{state=await api();}catch{}
  return result;

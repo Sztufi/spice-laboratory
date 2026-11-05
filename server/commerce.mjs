@@ -12,6 +12,7 @@ import {publicUpsell,selectedUpsell} from './upsell.mjs';
 import {publicTracking,ensureTrackingLink} from './gls.mjs';
 import {sendOrderConfirmation} from './order-email.mjs';
 import {resolveGlsLocker} from './gls-lockers.mjs';
+import {checkoutCustomer,profileDefaults,missingProfileWrites} from './checkout-profile.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
 const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Cookie'}});
@@ -60,25 +61,7 @@ function validateItems(items,catalogue){
  const ids=new Set();for(const item of items){if(!catalogue.products.some(p=>p.id===item?.id)||!Number.isInteger(item.quantity)||item.quantity<1||item.quantity>99||ids.has(item.id))fail(400,'Hibás termék vagy mennyiség.');ids.add(item.id);}
  assertAvailable(items,catalogue);return cartTotals(items,catalogue.products);
 }
-function checkoutText(value,label,max,{email=false,phone=false}={}){
- const text=typeof value==='string'?value.trim():'';
- if(!text||text.length>max)fail(400,`Érvényes ${label} szükséges.`);
- if(email&&!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(text))fail(400,'Érvényes e-mail-cím szükséges.');
- if(phone&&!/^\+?[0-9 ()-]{6,40}$/.test(text))fail(400,'Érvényes telefonszám szükséges.');
- return text;
-}
-function checkoutAddress(input,countries,label){
- const value=input&&typeof input==='object'?input:{},country=String(value.country||'').toUpperCase();
- if(!countries.has(country))fail(400,`A ${label} országa nem támogatott.`);
- return {country,postal_code:checkoutText(value.postalCode,`${label} irányítószám`,20),city:checkoutText(value.city,`${label} település`,100),line1:checkoutText(value.line1,`${label} utca és házszám`,160),line2:typeof value.line2==='string'?value.line2.trim().slice(0,160):''};
-}
-function checkoutCustomer(input,countries){
- const raw=input?.customer;if(!raw||typeof raw!=='object')fail(400,'Add meg a rendelési adatokat.');
- if(raw.termsAccepted!==true||raw.privacyAccepted!==true)fail(400,'Az ÁSZF és az adatkezelési tájékoztató elfogadása szükséges.');
- const email=checkoutText(raw.email,'e-mail-cím',254,{email:true}),shippingRaw=raw.shipping||{},shipping={name:checkoutText(shippingRaw.name,'szállítási név',120),phone:checkoutText(shippingRaw.phone,'telefonszám',40,{phone:true}),address:checkoutAddress(shippingRaw.address,countries,'szállítási cím')};
- const same=raw.billingSame!==false,billing=same?{name:shipping.name,email,address:{...shipping.address}}:{name:checkoutText(raw.billing?.name,'számlázási név',120),email,address:checkoutAddress(raw.billing?.address,countries,'számlázási cím')};
- return {billing,shipping,consent:{termsAccepted:true,privacyAccepted:true,version:'checkout-v1',acceptedAt:now()}};
-}
+// Checkout validation is shared with the authenticated demo checkout.
 async function createCheckout(request,ctx,config,input){
  const {db,user,env,fetcher,catalogue}=ctx;if(!config.stripeEnabled)fail(503,'A Stripe-fizetés még nincs aktiválva.');
  if(!/^[\da-f-]{36}$/i.test(input?.requestId||''))fail(400,'Hibás kérésazonosító.');
@@ -122,7 +105,7 @@ async function createCheckout(request,ctx,config,input){
  params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]',String(shipping.deliveryMinDays));params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]','business_day');params.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]',String(shipping.deliveryMaxDays));
  const session=await stripe(env,'checkout/sessions',{params,key:`spice-checkout-${row.id}`,fetcher});
  if(!/^cs_[a-zA-Z0-9_]+$/.test(session.id||'')||!session.url?.startsWith('https://checkout.stripe.com/')||!Number.isInteger(session.expires_at)||session.expires_at*1000<=Date.now()||session.livemode!==(config.mode==='live'))fail(502,'Érvénytelen fizetési válasz.');
- await q(db,"UPDATE payment_checkouts SET session_id=?,session_url=?,expires_at=?,status='open',updated_at=? WHERE id=? AND status='creating'",session.id,session.url,session.expires_at,now(),row.id).run();
+ await db.batch([q(db,"UPDATE payment_checkouts SET session_id=?,session_url=?,expires_at=?,status='open',updated_at=? WHERE id=? AND status='creating'",session.id,session.url,session.expires_at,now(),row.id),...(input.checkoutMode==='account'?missingProfileWrites(db,user,customerData):[])]);
  return json({url:session.url,checkoutId:row.id,mode:config.mode},201);
 }
 async function applySession(db,row,session,eventId,eventType){
@@ -184,7 +167,7 @@ export async function handleCommerceRequest(request,ctx){
  ctx={...ctx,env};
  if(request.method==='GET'&&path==='config'){
   const store=db?await loadStore(db,{env}):null;
-  return json({...config,upsell:publicUpsell(store?.settings,store?.catalogue),accountAvailable:!!user?.userId&&!!user?.email});
+  return json({...config,upsell:publicUpsell(store?.settings,store?.catalogue),accountAvailable:!!user?.userId&&!!user?.email,...(url.searchParams.get('checkout')==='1'?{profile:await profileDefaults(db,user)}:{})});
  }
  if(request.method==='GET'&&path.startsWith('tracking/'))return json(await publicTracking(db,env,path.slice('tracking/'.length),ctx.fetcher));
  if(!db)fail(503,'A szolgáltatás átmenetileg nem elérhető.');

@@ -182,6 +182,21 @@ test('demo account orders use the same approved shipping quote and retain it in 
  const response=await handleAccountRequest(req,{db,user:alice,env});assert.equal(response.status,201);
  const row=sqlite.prepare('SELECT total_minor,shipping_json FROM customer_orders').get();assert.equal(row.total_minor,649000);assert.equal(JSON.parse(row.shipping_json).feeMinor,99000);
 });
+test('member checkout fills missing profile data, preserves existing addresses and never returns another member’s data',async()=>{
+ const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher};
+ const form=checkoutBody();form.customer.billingSame=false;form.customer.billing={name:'Számlázási név',address:{...form.customer.shipping.address,line1:'Számla utca 3'}};
+ assert.equal((await call(ctx,'checkout','POST',form)).status,201);
+ const defaults=async user=>(await (await call({...ctx,user},'config?checkout=1')).json()).profile;
+ const p=await defaults(alice);assert.equal(p.phone,form.customer.shipping.phone);assert.equal(p.addresses.shipping.line1,'Példa utca 1.');assert.equal(p.addresses.billing.line1,'Számla utca 3');
+ assert.deepEqual((await defaults(bob)).addresses,{});assert.equal(await defaults(null),null);
+ assert.equal((await (await call(ctx,'config')).json()).profile,undefined);
+ const {handleAccountRequest}=await import('../server/account.mjs');
+ const demo=async(user,customer)=>handleAccountRequest(new Request(origin+'/api/account/demo-orders',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({requestId:crypto.randomUUID(),items:form.items,customer})}),{db,user,env});
+ form.customer.shipping.address.line1='Másik utca 4';assert.equal((await demo(alice,form.customer)).status,201);
+ assert.equal((await defaults(alice)).addresses.shipping.line1,'Példa utca 1.');
+ assert.equal((await demo(bob,form.customer)).status,201);assert.equal((await defaults(bob)).addresses.shipping.line1,'Másik utca 4');
+ assert.equal((await defaults(bob)).email,bob.email);
+});
 test('checkout upsell is independently configured, never mutates the cart, and is revalidated on the server',async()=>{
  const {db,sqlite}=database(),mock=mockStripe(),ctx={db,env,user:alice,fetcher:mock.fetcher};
  const setting={id:'upsell',enabled:true,thresholdMinor:500000,productId:'bulls-blaze',discountPercent:20,title:'MÉG EGY JÓ DÖNTÉS.',copy:'Dobd hozzá kedvezményesen.'};

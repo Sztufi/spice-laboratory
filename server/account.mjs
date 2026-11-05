@@ -1,6 +1,7 @@
 import {refundColumns,refundSummary} from './refunds.mjs';
 import { shippingMethods, shippingQuote } from './shipping.mjs';
 import {resolveGlsLocker} from './gls-lockers.mjs';
+import {checkoutCustomer,missingProfileWrites} from './checkout-profile.mjs';
 import { seedCatalogue } from '../public/catalogue.mjs';
 import {loadStore,runtimeEnv,assertAvailable,couponQuote} from './store.mjs';
 import { sanitizeCart, cartTotals } from '../public/shop-core.mjs';
@@ -105,6 +106,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
     }
     if (request.method==='POST' && route.length===1 && route[0]==='demo-orders') {
       const body=await bodyJson(request);
+      const details=body.customer?checkoutCustomer(body,new Set(['HU','RO'])):null;
       if(!/^[0-9a-f-]{36}$/i.test(body?.requestId||''))fail(400,'Hibás kérésazonosító.');
       if(!Array.isArray(body.items)||body.items.length>100)fail(400,'Hibás kosár.');
       const safe=sanitizeCart(body.items,catalogue.products);const total=cartTotals(safe,catalogue.products);
@@ -121,7 +123,7 @@ export async function handleAccountRequest(request,{db,bucket,user,env={}}) {
       if(previous)return json({saved:true,...previous});
       const id=crypto.randomUUID(),number=`DEMO-${id.slice(0,8).toUpperCase()}`;
       const items=total.lines.map(line=>({productId:line.id,sku:line.product.sku||'',name:line.product.name,quantity:line.quantity,priceMinor:line.product.priceMinor,subtotalMinor:line.subtotalMinor}));
-      await query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null,discount?JSON.stringify(discount):null).run();
+      await db.batch([query(db,'INSERT INTO customer_orders(id,user_id,request_id,number,kind,status,total_minor,currency,items_json,created_at,shipping_json,discount_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,request_id) DO NOTHING',id,user.userId,body.requestId,number,'demo','demo-completed',total.totalMinor,catalogue.currency,JSON.stringify(items),new Date().toISOString(),shipping?JSON.stringify(shipping):null,discount?JSON.stringify(discount):null),...(details?missingProfileWrites(db,user,details):[])]);
       const saved=await query(db,'SELECT id,number FROM customer_orders WHERE user_id = ? AND request_id = ?',user.userId,body.requestId).first();
       return json({saved:true,...saved},201);
     }

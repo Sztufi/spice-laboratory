@@ -1,4 +1,5 @@
 import {brandIcon} from './brand-icons.mjs';
+import {mountGlsFees} from './admin-gls-fees.mjs';
 import {styleIcons} from './brand-icons.mjs';
 import {mountWithdrawals} from './admin-withdrawals.mjs';
 import {analyticsPanel,archivePanel,mountReports} from './admin-analytics.mjs';
@@ -61,6 +62,7 @@ function render(){
  if(tab==='analytics'||tab==='archive')mountReports($('#admin-panel'),api,{archive:tab==='archive'});
  if(tab==='withdrawals')mountWithdrawals($('#admin-panel'),api);
  if(tab==='seo')mountSeoPanel($('#admin-panel'),data,api,refresh);
+ if(tab==='gls')mountGlsFees($('#admin-panel'),data,api,refresh,notice);
  if(tab==='smartbill')mountSmartbill($('#admin-panel'),api);
  if(tab==='inventory')mountInventory($('#admin-panel'),api);
  if(tab==='media')mountMediaLibrary($('#admin-panel .media-library-root'),{media:data.media,api,onSaved:async message=>{await refresh();if(message)notice(message,true);}});

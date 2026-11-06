@@ -1,4 +1,5 @@
 import {brandIcon} from './brand-icons.mjs';
+import './reviews.mjs';
 import {styleIcons} from './brand-icons.mjs';
 import { productCard } from './product-markup.mjs';
 import { categoryPath } from './page-data.mjs';

@@ -1,6 +1,6 @@
 import {loadStore,query as q,all,StoreError,fail,text,slug,imageUrl,recordDefaults,isStoreAdmin,runtimeEnv} from './store.mjs';
 import {shippingMethods} from './shipping.mjs';
-import {saveStripeKey,stripeKeyStatus,stripeRuntime} from './stripe-vault.mjs';
+import {saveStripeKey,stripeKeyStatus,stripeRuntime,saveStripeWebhook,stripeWebhookStatus} from './stripe-vault.mjs';
 import {analyticsEndpoint} from './admin-analytics.mjs';
 import {refundColumns,refundSummary} from './refunds.mjs';
 import {sendWithdrawalReceipt,withdrawalMailReady} from './withdrawals.mjs';
@@ -158,6 +158,11 @@ export async function handleAdminRequest(request,ctx){
   if(parts.length===1&&parts[0]==='stripe-key'){
    if(request.method==='GET')return json(await stripeKeyStatus(env,bucket));
    if(request.method==='PUT')return json(await saveStripeKey(env,bucket,(await body(request))?.secretKey));
+   fail(405,'Nem támogatott művelet.');
+  }
+  if(parts.length===1&&parts[0]==='stripe-webhook-key'){
+   if(request.method==='GET')return json(await stripeWebhookStatus(env,bucket));
+   if(request.method==='PUT'){const data=await body(request);return json(await saveStripeWebhook(env,bucket,data?.secretKey,data?.mode));}
    fail(405,'Nem támogatott művelet.');
   }
   if(parts[0]==='withdrawals'){

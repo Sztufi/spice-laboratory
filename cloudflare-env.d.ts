@@ -3,6 +3,7 @@ declare namespace Cloudflare {
     ADMIN_EMAILS?: string;
     STRIPE_ENABLED?: string;
     STRIPE_SECRET_KEY?: string;
+    STRIPE_VAULT_KEY?: string;
     STRIPE_WEBHOOK_SECRET?: string;
     STRIPE_WEBHOOK_READY?: string;
     STRIPE_MODE?: string;

@@ -11,6 +11,7 @@ import {publicUpsell,selectedUpsell} from './upsell.mjs';
 import {publicTracking,ensureTrackingLink} from './gls.mjs';
 import {sendOrderConfirmation} from './order-email.mjs';
 import {resolveGlsLocker} from './gls-lockers.mjs';
+import {stripeRuntime} from './stripe-vault.mjs';
 import {checkoutCustomer,profileDefaults,missingProfileWrites} from './checkout-profile.mjs';
 const q=(db,sql,...args)=>db.prepare(sql).bind(...args);
 const now=()=>new Date().toISOString();
@@ -162,7 +163,8 @@ export async function deliverMarketingEvent(ctx,orderId){
 }
 export async function handleCommerceRequest(request,ctx){
  try {
- const {db,user}=ctx,env=await runtimeEnv(db,ctx.env||{}),config=commerceConfig(env),url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
+ const {db,user}=ctx,url=new URL(request.url),path=url.pathname.replace(/^\/api\/commerce\/?/,'');
+ const base=await runtimeEnv(db,ctx.env||{}),env=['config','checkout-access','checkout','checkout-status','stripe-webhook'].includes(path)?await stripeRuntime(base):base,config=commerceConfig(env);
  ctx={...ctx,env};
  if(request.method==='GET'&&path==='config'){
   const store=db?await loadStore(db,{env}):null;

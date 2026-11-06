@@ -1,5 +1,6 @@
 import {loadStore,query as q,all,StoreError,fail,text,slug,imageUrl,recordDefaults,isStoreAdmin,runtimeEnv} from './store.mjs';
 import {shippingMethods} from './shipping.mjs';
+import {saveStripeKey,stripeKeyStatus,stripeRuntime} from './stripe-vault.mjs';
 import {analyticsEndpoint} from './admin-analytics.mjs';
 import {refundColumns,refundSummary} from './refunds.mjs';
 import {sendWithdrawalReceipt,withdrawalMailReady} from './withdrawals.mjs';
@@ -120,7 +121,7 @@ async function overview(db,user,env){
  ]);
  const totals=await q(db,"SELECT COUNT(*) AS orders,COALESCE(SUM(total_minor),0) AS revenue,(SELECT COALESCE(SUM(r.amount_minor),0) FROM payment_refunds r JOIN customer_orders o ON o.id=r.checkout_id WHERE r.status='succeeded' AND o.kind='stripe' AND o.status='paid' AND o.currency='HUF') AS refunded FROM customer_orders WHERE kind='stripe' AND status='paid' AND currency='HUF'").first();
  await ensureTrackingLinks(db,orders);const origin='https://spicelaboratory.eu';
- return {user:{email:user.email,name:user.fullName||user.email,provider:user.provider||'sites'},...store,orders:orders.map(row=>({...row,...refundSummary(row),trackingPageUrl:row.trackingToken?origin+'/kovetes/'+row.trackingToken:'',items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined,trackingToken:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await runtimeEnv(db,env))};
+ return {user:{email:user.email,name:user.fullName||user.email,provider:user.provider||'sites'},...store,orders:orders.map(row=>({...row,...refundSummary(row),trackingPageUrl:row.trackingToken?origin+'/kovetes/'+row.trackingToken:'',items:JSON.parse(row.items_json),shipping:row.shipping_json?JSON.parse(row.shipping_json):null,customer:row.customer_json?JSON.parse(row.customer_json):null,items_json:undefined,shipping_json:undefined,customer_json:undefined,trackingToken:undefined})),customers,subscribers,audit:auditRows,totals,seoState:seoState(seoSetting(store),env),config:commerceConfig(await stripeRuntime(await runtimeEnv(db,env)))};
 }
 async function upload(request,{db,bucket,user}){
  if(!bucket)fail(503,'A képtár nem érhető el.');
@@ -154,6 +155,11 @@ export async function handleAdminRequest(request,ctx){
   if(!db)fail(503,'Az adminisztráció adatbázisa nem érhető el.');
   if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
   const parts=new URL(request.url).pathname.replace(/^\/api\/admin\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
+  if(parts.length===1&&parts[0]==='stripe-key'){
+   if(request.method==='GET')return json(await stripeKeyStatus(env,bucket));
+   if(request.method==='PUT')return json(await saveStripeKey(env,bucket,(await body(request))?.secretKey));
+   fail(405,'Nem támogatott művelet.');
+  }
   if(parts[0]==='withdrawals'){
    if(request.method==='GET'){
     const page=Math.floor(Math.max(1,Math.min(1000000,Number(new URL(request.url).searchParams.get('page'))||1)));

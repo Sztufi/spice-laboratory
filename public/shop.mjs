@@ -10,7 +10,7 @@ import {purchaseQuantity} from './product-purchase.mjs';
 import { getCommerceConfig, startStripeCheckout, initCommerce } from './commerce.mjs';
 import { initAccount, isFavorite, favoritesFilterEnabled, favoriteProductIds, favoriteButtonMarkup, clearFavoritesFilter, archiveDemoOrder } from './account.mjs';
 import { catalogue } from './catalogue.mjs';
-import { MAX_QUANTITY, PRODUCT_USES, normalize, filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from './shop-core.mjs';
+import { MAX_QUANTITY, normalize, filterProducts, ingredientFacets, sanitizeCart, setQuantity, cartTotals, readFilters, writeFilters } from './shop-core.mjs';
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
@@ -19,11 +19,11 @@ const money = minor => formatMoney(minor, catalogue.currency);
 const ingredientsById = new Map(catalogue.ingredients.map(item => [item.id, item]));
 const productsById = new Map(catalogue.products.map(product => [product.id, product]));
 const label = id => ingredientsById.get(id)?.label || id;
-const useLabel = id => PRODUCT_USES.find(item => item.id === id)?.label || id;
 const CART_KEY = 'spice-lab-unalmas-kaja:demo-cart:v1';
 const isProductArchive=Boolean($('.listing-shop'));
 const pageCategory=document.body.dataset.pageCategory||'';
 let filters = readFilters(isProductArchive?location.search:'', catalogue);
+filters.uses=[];
 if(pageCategory)filters.category=pageCategory;
 let cart = [];
 let cartView = 'cart';
@@ -98,18 +98,15 @@ function renderCatalogue(updateHistory = true) {
   $('#categories').innerHTML = styleIcons([{ id: '', label: 'Összes' }, ...catalogue.categories].map(category =>
     pageCategory?`<a class="category-chip" href="${categoryPath(category.id,catalogue.categories)}"${category.id===pageCategory?' aria-current="page"':''}>${escape(category.label)}</a>`:`<button class="category-chip" type="button" data-category="${escape(category.id)}" aria-pressed="${filters.category === category.id}">${escape(category.label)}</button>`
   ).join(''));
-  $('#use-filters').innerHTML = styleIcons(PRODUCT_USES.map(use => `<button class="use-filter" type="button" data-use="${escape(use.id)}" aria-pressed="${filters.uses.includes(use.id)}">${icon(use.icon,24)}<span>${escape(use.label)}</span></button>`).join(''));
   if (focusedCategory !== undefined) [...document.querySelectorAll('[data-category]')].find(button => button.dataset.category === focusedCategory)?.focus({ preventScroll: true });
-  $('#active-filters').innerHTML = styleIcons([...filters.uses.map(id =>
-    `<button class="active-filter" type="button" data-remove-use="${escape(id)}" aria-label="${escape(useLabel(id))} felhasználási szűrő törlése">${escape(useLabel(id))}${icon('close', 12)}</button>`
-  ),...filters.ingredients.map(id =>
+  $('#active-filters').innerHTML = styleIcons(filters.ingredients.map(id =>
     `<button class="active-filter" type="button" data-remove-ingredient="${escape(id)}" aria-label="${escape(label(id))} szűrő törlése">${escape(label(id))}${icon('close', 12)}</button>`
-  )].join(''));
+  ).join(''));
   if (favoritesFilterEnabled()) $('#active-filters').insertAdjacentHTML('beforeend', styleIcons('<button class="favorite-filter-reset" type="button" id="clear-favorites-filter">Csak kedvencek ×</button>'));
-  $('#active-filters').hidden = !filters.ingredients.length && !filters.uses.length && !favoritesFilterEnabled();
-  $('#filter-count').textContent = filters.ingredients.length + filters.uses.length;
-  $('#filter-count').hidden = !filters.ingredients.length && !filters.uses.length;
-  $('#selected-count').textContent = `${filters.ingredients.length + filters.uses.length} kiválasztva`;
+  $('#active-filters').hidden = !filters.ingredients.length && !favoritesFilterEnabled();
+  $('#filter-count').textContent = filters.ingredients.length;
+  $('#filter-count').hidden = !filters.ingredients.length;
+  $('#selected-count').textContent = `${filters.ingredients.length} kiválasztva`;
   $('#apply-filters').textContent = `${results.length} termék megjelenítése`;
   $('#clear-ingredients').disabled = !filters.ingredients.length;
   for (const radio of document.querySelectorAll('[name="ingredient-match"]')) radio.checked = radio.value === filters.match;
@@ -229,10 +226,6 @@ document.addEventListener('click', event => {
   if (close) { document.getElementById(close.dataset.close)?.close(); return; }
   const category = event.target.closest('[data-category]');
   if (category) { filters.category = category.dataset.category; renderCatalogue(); return; }
-  const use = event.target.closest('[data-use]');
-  if (use) { const selected = new Set(filters.uses); selected.has(use.dataset.use) ? selected.delete(use.dataset.use) : selected.add(use.dataset.use); filters.uses = [...selected]; renderCatalogue(); return; }
-  const removeUse = event.target.closest('[data-remove-use]');
-  if (removeUse) { filters.uses = filters.uses.filter(id => id !== removeUse.dataset.removeUse); renderCatalogue(); return; }
   const removeIngredient = event.target.closest('[data-remove-ingredient]');
   if (removeIngredient) {
     filters.ingredients = filters.ingredients.filter(id => id !== removeIngredient.dataset.removeIngredient);

@@ -18,7 +18,7 @@ git commit -m "Rövid leírás"
 git push -u origin rovid-leiras
 ```
 
-Ezután GitHubon nyiss Pull Requestet a `main` ágba. A GitHub Actions minden push és Pull Request esetén lefuttatja a teszteket. Éles Sites- vagy későbbi SiteGround-közzététel előtt mindig a `main` legyen az ellenőrzött forrás.
+Ezután GitHubon nyiss Pull Requestet a `main` ágba. A Pull Request megnyitása előtt futtasd a teszteket helyben. Éles Sites- vagy későbbi SiteGround-közzététel előtt mindig a `main` legyen az ellenőrzött forrás.
 
 Az `.env` fájlokat, API-kulcsokat és jelszavakat soha ne commitold; ezeket csak a célkörnyezet változóiként állítsd be.
 

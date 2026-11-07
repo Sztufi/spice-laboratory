@@ -21,7 +21,7 @@ const money=(value,currency='HUF')=>new Intl.NumberFormat('hu-HU',{style:'curren
 const date=value=>value?new Intl.DateTimeFormat('hu-HU',{dateStyle:'medium'}).format(new Date(value)):'—';
 const labels={dashboard:'Vezérlőpult',analytics:'Értékesítési analitika',archive:'Rendelési archívum',withdrawals:'Elállási nyilatkozatok',products:'Termékek',inventory:'Raktárkezelés',categories:'Kategóriák',ingredients:'Összetevők',orders:'Rendelések',customers:'Vásárlók',coupons:'Kuponok',upsell:'Upsell a pénztárban',recipes:'Blog / receptek',seo:'SEO / keresőoptimalizálás',media:'Médiatár',newsletter:'Hírlevél',omnisend:'Omnisend',smartbill:'SmartBill',gls:'GLS szállítás',settings:'Beállítások'};
 const kindNames={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon'};
-labels.packing='Csomagolás & AWB';
+labels.packing='Admin Pack & AWB';
 const stateLabels={'pending-payment':'Fizetésre vár',published:'Közzétéve',draft:'Piszkozat',archived:'Archiválva',paid:'Fizetve','demo-completed':'Próbavásárlás',processing:'Feldolgozás',packing:'Csomagolás',shipped:'Feladva',completed:'Teljesítve','on-hold':'Várakozik',cancelled:'Törölve',synced:'Omnisend visszaigazolta',failed:'Szinkronhiba',pending:'Függőben'};
 let data=null,tab=new URLSearchParams(location.search).get('tab')||'dashboard',editing=null;
 let productMediaEditor=null,recipeUploader=null;

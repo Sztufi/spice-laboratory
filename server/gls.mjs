@@ -46,10 +46,10 @@ function bytes(labels){
  fail(502,'A GLS-címke formátuma nem értelmezhető.');
 }
 function providerError(data){
- const error=data?.ErrorList?.[0]||data?.Error||data?.error;
+ const error=data?.PrintLabelsErrorList?.[0]||data?.ErrorList?.[0]||data?.Error||data?.error;
  if(error)fail(502,'A GLS elutasította a címkeigényt. Ellenőrizd a címzettet, a szerződéses adatokat és az utánvét beállítását.');
 }
-export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId}){
+export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId,printerType,weightGrams}){
  if(!bucket)fail(503,'A címketároló nem érhető el.');
  const config=await glsConfig(db,env);if(!config.ready)fail(503,'A GLS nincs aktiválva. Ellenőrizd az admin beállítást és a titkos GLS-környezetváltozókat.');
  const order=await query(db,`SELECT o.*,c.email,c.full_name,c.phone,p.customer_json FROM customer_orders o LEFT JOIN customers c ON c.id=o.user_id LEFT JOIN payment_checkouts p ON p.id=o.id WHERE o.id=?`,orderId).first();
@@ -60,6 +60,7 @@ export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId}){
  if(prior)fail(409,'Ehhez a rendeléshez GLS-címke létrehozása már folyamatban van.');
  const claimed=await query(db,"INSERT INTO gls_shipments(order_id,parcel_number,label_key,status,created_at,updated_at) VALUES(?,?,?,'creating',?,?) ON CONFLICT(order_id) DO NOTHING RETURNING order_id",orderId,'','',now(),now()).first();
  if(!claimed)fail(409,'Ehhez a rendeléshez GLS-címke létrehozása már folyamatban van.');
+ let submitted=false;
  try{
   const customer=order.customer_json?JSON.parse(order.customer_json):{};
   const shipping=customer.shipping||customer.collected_information?.shipping_details||customer.billing;
@@ -68,7 +69,7 @@ export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId}){
   const phone=shipping?.phone||billing?.phone||order.phone;
   const email=billing?.email||order.email;
   const pickup={Name:config.senderName,Street:config.senderStreet,HouseNumber:config.senderHouseNumber,City:config.senderCity,ZipCode:config.senderPostalCode,CountryIsoCode:config.senderCountry,...contact(config.senderContactName,config.senderContactPhone,config.senderContactEmail)};
-  const parcel={ClientNumber:Number(env.GLS_CLIENT_NUMBER),ClientReference:order.number,PickupAddress:pickup,DeliveryAddress:address(shipping,recipient,phone,email),Content:'Fűszerek',Weight:config.boxWeightGrams/1000};
+  const parcel={ClientNumber:Number(env.GLS_CLIENT_NUMBER),ClientReference:order.number,PickupAddress:pickup,DeliveryAddress:address(shipping,recipient,phone,email),Content:'Fűszerek',Weight:(weightGrams||config.boxWeightGrams)/1000};
   if(shipping?.pickupPoint){
    const point=shipping.pickupPoint;
    if(point.type!=='parcel-locker'||point.country!=='HU'||!point.id)fail(400,'Hibás GLS automata-adatok.');
@@ -77,15 +78,19 @@ export async function createGlsLabel({db,env,bucket,fetcher=fetch,orderId}){
    parcel.ServiceList=[{Code:'PSD',PSDParameter:{StringValue:point.id}}];
   }
   if(order.kind==='cod'){if(!config.codEnabled)fail(409,'Az utánvét a GLS-beállításokban nincs engedélyezve.');Object.assign(parcel,{CODAmount:Math.round(order.total_minor/100),CODCurrency:'HUF',CODReference:order.number});}
-  const payload={Username:env.GLS_USERNAME,Password:await passwordBytes(env.GLS_PASSWORD),ParcelList:[parcel],WebshopEngine:'Spice Laboratory',PrintPosition:1,ShowPrintDialog:false,TypeOfPrinter:config.printerType};
-  let response;try{response=await fetcher(endpoint(config.country,'PrintLabels'),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});}catch{fail(502,'A GLS nem válaszolt. Próbáld újra később.');}
+  const payload={Username:env.GLS_USERNAME,Password:await passwordBytes(env.GLS_PASSWORD),ParcelList:[parcel],WebshopEngine:'Spice Laboratory',PrintPosition:1,ShowPrintDialog:false,TypeOfPrinter:printerType||config.printerType};
+  submitted=true;
+  let response;try{response=await fetcher(endpoint(config.country,'PrintLabels'),{method:'POST',redirect:'manual',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});}catch{fail(502,'A GLS nem válaszolt. Próbáld újra később.');}
   if(!response.ok)fail(502,response.status===401||response.status===403?'A GLS elutasította a belépési adatokat.':'A GLS címkeigény sikertelen. Próbáld újra később.');
-  let result;try{result=await response.json();}catch{fail(502,'A GLS válasza nem feldolgozható.');}providerError(result);
+  let result;try{result=await response.json();}catch{fail(502,'A GLS válasza nem feldolgozható.');}
+  if(result?.PrintLabelsErrorList?.length&&!result?.PrintLabelsInfoList?.length)submitted=false;
+  providerError(result);
   const info=result?.PrintLabelsInfoList?.[0];if(!info?.ParcelNumber||!result?.Labels)fail(502,'A GLS nem adott vissza csomagszámot vagy címkét.');
-  const key=`gls-labels/${orderId}/${String(info.ParcelNumber)}.pdf`;await bucket.put(key,bytes(result.Labels),{httpMetadata:{contentType:'application/pdf',contentDisposition:`attachment; filename="gls-${String(order.number).replace(/[^A-Za-z0-9_-]/g,'_')}.pdf"`}});
+  const pdf=bytes(result.Labels);if(new TextDecoder().decode(pdf.slice(0,4))!=='%PDF')fail(502,'A GLS nem PDF-címkét adott vissza.');
+  const key=`gls-labels/${orderId}/${String(info.ParcelNumber)}.pdf`;await bucket.put(key,pdf,{customMetadata:{printerType:payload.TypeOfPrinter,parcelId:String(info.ParcelId||'')},httpMetadata:{contentType:'application/pdf',contentDisposition:`attachment; filename="gls-${String(order.number).replace(/[^A-Za-z0-9_-]/g,'_')}.pdf"`}});
   await query(db,"UPDATE gls_shipments SET parcel_number=?,label_key=?,status='ready',updated_at=? WHERE order_id=?",String(info.ParcelNumber),key,now(),orderId).run();
   return {created:true,parcelNumber:String(info.ParcelNumber),labelUrl:`/api/admin/orders/${encodeURIComponent(orderId)}/gls-label`};
- }catch(error){await query(db,"DELETE FROM gls_shipments WHERE order_id=? AND status='creating'",orderId).run();throw error;}
+ }catch(error){if(submitted){await query(db,"UPDATE gls_shipments SET status='review',updated_at=? WHERE order_id=? AND status='creating'",now(),orderId).run();fail(502,'A GLS-kérés kimenetele nem igazolható. Ellenőrizd a MyGLS-ben a rendelési hivatkozást; nem küldünk újabb igényt, nehogy dupla csomag keletkezzen.');}await query(db,"DELETE FROM gls_shipments WHERE order_id=? AND status='creating'",orderId).run();throw error;}
 }
 export async function glsLabel(db,bucket,orderId){const shipment=await query(db,"SELECT label_key,parcel_number FROM gls_shipments WHERE order_id=? AND status='ready'",orderId).first();if(!shipment)fail(404,'Ehhez a rendeléshez még nincs GLS-címke.');const object=await bucket?.get(shipment.label_key);if(!object)fail(404,'A GLS-címke fájlja nem érhető el.');return {object,parcelNumber:shipment.parcel_number};}
 async function parcelStatus(config,env,parcelNumber,fetcher){const payload={Username:env.GLS_USERNAME,Password:await passwordBytes(env.GLS_PASSWORD),ClientNumberList:[Number(env.GLS_CLIENT_NUMBER)],ParcelNumber:Number(parcelNumber),ReturnPOD:false,LanguageIsoCode:'HU'};let response;try{response=await fetcher(endpoint(config.country,'GetParcelStatuses'),{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});}catch{fail(502,'A GLS követési szolgáltatása most nem válaszol.');}if(!response.ok)fail(502,'A GLS követési szolgáltatása nem elérhető.');let result;try{result=await response.json();}catch{fail(502,'A GLS követési válasza hibás.');}providerError(result);return result;}

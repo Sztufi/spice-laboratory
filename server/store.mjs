@@ -23,7 +23,7 @@ export function adminPrincipal(sitesUser,googleUser,env={}){
 export const defaultCategories=seedCatalogue.categories.map(category=>({...initialCategories.find(item=>item.id===category.id),...category,status:'published',parentId:'',revision:'seed'}));
 const initial={product:seedCatalogue.products.map(product=>({...product,sku:verifiedSkus[product.id]||'',status:'published',manageStock:false,stockQuantity:0,revision:'seed'})),category:defaultCategories,ingredient:seedCatalogue.ingredients.map(item=>({...item,status:'published',revision:'seed'})),recipe:recipeSeeds,coupon:[],setting:[],media:[]};
 export async function loadStore(db,{admin=false,env={},withInventory=true}={}){
- let records=db?await all(db,'SELECT kind,id,payload_json,status,revision,updated_at FROM store_records ORDER BY created_at,id LIMIT 5000'):[];
+ let records=db?await all(db,"SELECT kind,id,payload_json,status,revision,updated_at FROM store_records WHERE kind!='packing' ORDER BY created_at,id LIMIT 5000"):[];
  if(db&&records.some(r=>r.kind==='product')&&!records.some(r=>r.kind==='system'&&r.id==='manual-stock-v1')){
   const old=records.find(r=>r.kind==='setting'&&r.id==='smartbill'&&r.status==='published');
   const linked=(old?JSON.parse(old.payload_json).stockSyncEnabled:undefined)??(env.SMARTBILL_STOCK_SYNC_ENABLED==='true');
@@ -35,7 +35,7 @@ export async function loadStore(db,{admin=false,env={},withInventory=true}={}){
    if(linked)ops.push(query(db,`UPDATE store_records AS p SET payload_json=json_set(payload_json,'$.manageStock',json('true'),'$.stockQuantity',COALESCE((SELECT MAX(0,s.quantity-COALESCE((SELECT SUM(m.quantity) FROM store_stock_movements m WHERE m.product_id=p.id AND m.smartbill_confirmed_at IS NULL),0)-COALESCE(json_extract(p.payload_json,'$.safetyStock'),0)) FROM store_smartbill_stock s JOIN store_inventory_sync i ON i.id='smartbill' AND i.generation=s.generation AND i.source_key=s.source_key WHERE s.product_id=p.id AND s.sku=json_extract(p.payload_json,'$.sku') AND s.status='ok'),0)),revision=lower(hex(randomblob(16))),updated_at=? WHERE p.kind='product' AND p.status!='archived' AND COALESCE(json_extract(p.payload_json,'$.manageStock'),0)=0 AND ${guard}`,new Date().toISOString()));
    const stamp=new Date().toISOString();
    ops.push(query(db,"INSERT OR IGNORE INTO store_records(kind,id,payload_json,status,revision,created_at,updated_at) VALUES('system','manual-stock-v1','{}','published','v1',?,?)",stamp,stamp));await db.batch(ops);
-   records=await all(db,'SELECT kind,id,payload_json,status,revision,updated_at FROM store_records ORDER BY created_at,id LIMIT 5000');
+   records=await all(db,"SELECT kind,id,payload_json,status,revision,updated_at FROM store_records WHERE kind!='packing' ORDER BY created_at,id LIMIT 5000");
   }
  }
  const merged={};

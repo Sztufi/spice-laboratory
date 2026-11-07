@@ -17,6 +17,7 @@ import {omnisendRead,omnisendWrite} from './admin-omnisend.mjs';
 import {inventoryOverview,assertMappingChange} from './inventory.mjs';
 import {productMedia} from './product-media.mjs';
 import {validateGlsSettings,glsStatus,createGlsLabel,glsLabel,ensureTrackingLinks} from './gls.mjs';
+import {packingQueue,packingDetail,savePacking,packingLabel} from './packing.mjs';
 const headers={'Cache-Control':'private, no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 const kinds={products:'product',categories:'category',ingredients:'ingredient',recipes:'recipe',coupons:'coupon',settings:'setting'};
@@ -155,6 +156,13 @@ export async function handleAdminRequest(request,ctx){
   if(!db)fail(503,'Az adminisztráció adatbázisa nem érhető el.');
   if(!['GET','HEAD'].includes(request.method))assertSameOrigin(request);
   const parts=new URL(request.url).pathname.replace(/^\/api\/admin\/?/,'').split('/').filter(Boolean).map(decodeURIComponent);
+  if(parts[0]==='packing'){
+   if(request.method==='GET'&&parts.length===1)return json(await packingQueue(db,new URL(request.url)));
+   if(request.method==='GET'&&parts.length===2)return json(await packingDetail(db,env,parts[1]));
+   if(request.method==='PUT'&&parts.length===2){const result=await savePacking(db,user,parts[1],await body(request));await audit(db,user,'pack','order',parts[1]);return json(result);}
+   if(request.method==='POST'&&parts.length===3&&parts[2]==='label'){await body(request);const result=await packingLabel({...ctx,env},parts[1]);await audit(db,user,'pack-label','order',parts[1]);return json(result,result.created?201:200);}
+   fail(405,'Nincs ilyen csomagolási művelet.');
+  }
   if(parts.length===1&&parts[0]==='stripe-key'){
    if(request.method==='GET')return json(await stripeKeyStatus(env,bucket));
    if(request.method==='PUT')return json(await saveStripeKey(env,bucket,(await body(request))?.secretKey));
@@ -224,7 +232,7 @@ export async function handleAdminRequest(request,ctx){
    await body(request);const result=await createGlsLabel({db,env,bucket,fetcher:ctx.fetcher,orderId:parts[1]});await audit(db,user,'gls-label','order',parts[1]);return json(result,result.created?201:200);
   }
   if(parts[0]==='orders'&&parts.length===3&&parts[2]==='gls-label'&&request.method==='GET'){
-   const label=await glsLabel(db,bucket,parts[1]);return new Response(label.object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="gls-${label.parcelNumber}.pdf"`}});
+   const label=await glsLabel(db,bucket,parts[1]);return new Response(label.object.body,{headers:{...headers,'Content-Type':'application/pdf','Content-Disposition':`${new URL(request.url).searchParams.get('inline')==='1'?'inline':'attachment'}; filename="gls-${label.parcelNumber}.pdf"`,'X-GLS-Printer-Type':label.object.customMetadata?.printerType||'unknown'}});
   }
   if(parts[0]==='media'&&request.method==='POST'&&parts.length===1)return await upload(request,ctx);
   if(parts[0]==='media'&&parts.length===2&&['PUT','DELETE'].includes(request.method)){

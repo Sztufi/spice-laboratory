@@ -50,6 +50,9 @@ export async function loadStore(db,{admin=false,env={},withInventory=true}={}){
   merged.product=merged.product.map(p=>p.manageStock?{...p,availableQuantity:Math.max(0,p.stockQuantity-(reserved.get(p.id)||0))}:p);
  }
  const validCategories=new Set(merged.category.map(item=>item.id));
+ const ratingRows=db?await all(db,"SELECT json_extract(payload_json,'$.product') product,COUNT(*) count,AVG(json_extract(payload_json,'$.rating')) average FROM store_records WHERE kind='review' AND status='published' GROUP BY json_extract(payload_json,'$.product')"):[];
+ const ratings=new Map(ratingRows.map(r=>[r.product,{reviewCount:r.count,reviewAverage:r.average}]));
+ merged.product=merged.product.map(p=>({...p,reviewCount:0,reviewAverage:0,...ratings.get(p.id)}));
  const products=merged.product.filter(product=>admin||product.categories.some(id=>validCategories.has(id))).map(product=>{
   const {revision,status,stockQuantity,inventory,availableQuantity,stockSource,safetyStock,lowStockThreshold,...rest}=product;
   const price=product.salePriceMinor>0&&product.salePriceMinor<product.priceMinor?product.salePriceMinor:product.priceMinor;

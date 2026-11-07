@@ -191,13 +191,16 @@ body.dialog-open{overflow:hidden}
   .shop-dialog{border-left:0}
   @supports(grid-template-rows:subgrid){
     .product-grid{row-gap:18px}
-    .product-card{display:grid;grid-template-rows:subgrid;grid-row:span 6;row-gap:6px}
+    .product-card{display:grid;grid-template-rows:subgrid;grid-row:span 7;row-gap:6px}
     .product-info,.card-bottom{display:contents}
-    .product-subtitle{align-self:start;margin:4px 0 0}
+    .product-media{grid-row:1}
+    .product-subtitle{grid-row:2;align-self:start;margin:4px 0 0}
+    .product-info>h3{grid-row:3}
+    .product-info>.card-rating{grid-row:4;align-self:start;margin:2px 0 4px}
     .product-title{margin:0}
-    .card-ingredients{align-self:start;margin:4px 0 2px}
-    .product-price{align-self:end;margin:0}
-    .add-button{align-self:end}
+    .card-ingredients{grid-row:5;align-self:start;margin:4px 0 2px}
+    .product-price{grid-row:6;align-self:end;margin:0}
+    .card-bottom>.add-button{grid-row:7;align-self:end}
   }
 }
 @media(max-width:360px){

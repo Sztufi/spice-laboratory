@@ -2,6 +2,26 @@
 
 Mobilra tervezett fűszer-webshop előnézet, kedvencekkel és szerveroldali vásárlói fiókalappal.
 
+## Fejlesztés GitHubbal
+
+A GitHub-repo az elsődleges forráskód. Ne szerkeszd párhuzamosan a GitHubot és a korábbi Sites-forrást: a változtatásokat ebben a repóban készítsd el, ellenőrizd, majd pushold fel.
+
+```bash
+git clone https://github.com/Sztufi/spice-laboratory.git
+cd spice-laboratory
+npm ci
+git checkout -b rovid-leiras
+# szerkesztés
+npm test
+git add .
+git commit -m "Rövid leírás"
+git push -u origin rovid-leiras
+```
+
+Ezután GitHubon nyiss Pull Requestet a `main` ágba. A GitHub Actions minden push és Pull Request esetén lefuttatja a teszteket. Éles Sites- vagy későbbi SiteGround-közzététel előtt mindig a `main` legyen az ellenőrzött forrás.
+
+Az `.env` fájlokat, API-kulcsokat és jelszavakat soha ne commitold; ezeket csak a célkörnyezet változóiként állítsd be.
+
 - Oldalak és navigáció: [docs/WEBSITE-PAGES.md](docs/WEBSITE-PAGES.md)
 - Tulajdonosi admin (`/admin`), termék- és kategóriakezelés, receptblog (`/blog`) és vendégfeliratkozás: [docs/ADMIN-RECIPES.md](docs/ADMIN-RECIPES.md)
 - Boltfelület: `storefront/index.html`, `public/`

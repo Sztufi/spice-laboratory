@@ -3,6 +3,7 @@ import {formatMoney} from '../public/money.mjs';
 import {unitPrice} from '../public/product-purchase.mjs';
 import {brandIcon} from '../public/brand-icons.mjs';
 import {galleryMarkup} from './product-gallery.mjs';
+import {productRating} from '../public/rating-markup.mjs';
 import {purchaseButton,soldOut} from '../public/stock-state.mjs';
 
 export function productExperience(product,category,config){
@@ -12,7 +13,7 @@ export function productExperience(product,category,config){
  const {gallery,dialog}=galleryMarkup(product);
  return `<article class="product-page product-experience" data-product-id="${h(product.id)}">
  ${gallery}
- <div class="product-page-info"><p class="section-kicker">${h(category.label)}</p><h1 class="page-title product-page-title">${h(product.name)}</h1><p class="product-page-subtitle">${h(product.subtitle)} <span>· ${product.weightGrams} g</span></p><p class="page-lead product-use">${h(product.description)}</p>
+ <div class="product-page-info"><p class="section-kicker">${h(category.label)}</p><div class="product-title-row"><h1 class="page-title product-page-title">${h(product.name)}</h1>${productRating(product)}</div><p class="product-page-subtitle">${h(product.subtitle)} <span>· ${product.weightGrams} g</span></p><p class="page-lead product-use">${h(product.description)}</p>
  <div class="purchase-panel" id="product-purchase"><p class="product-page-price">${sale?`<del aria-label="Korábbi ár">${money(product.regularPriceMinor)}</del> `:''}${money(product.priceMinor)}${sale?'<small>Akciós ár</small>':''}</p><p class="unit-price">${h(unitPrice(product))}<span>Szállítási díj nélkül</span></p>
  <p class="product-stock-message" data-product-stock-message${disabled?'':' hidden'}>${soldOut(product)?'Elfogyott. Kérj értesítést, és szólunk, amikor újra elérhető.':'A készlet ellenőrzés alatt. Kérj értesítést az elérhetőségről.'}</p>
  <div class="product-page-actions"><div class="pdp-quantity"${disabled?' hidden':''}><label for="product-quantity">Mennyiség</label><div><button type="button" data-quantity-step="-1" aria-label="Mennyiség csökkentése" disabled>−</button><input id="product-quantity" type="number" inputmode="numeric" min="1" max="99" step="1" value="1"${disabled?' disabled':''}><button type="button" data-quantity-step="1" aria-label="Mennyiség növelése"${disabled?' disabled':''}>+</button></div></div>${purchaseButton(product)}<div data-product-favorite>${defaultFavorite(product)}</div></div>

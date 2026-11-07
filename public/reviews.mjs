@@ -1,12 +1,13 @@
 import {catalogue} from './catalogue.mjs';
 import {demoReviews} from './reviews-demo.mjs';
-import {polishReviews,cardRating} from './rating-markup.mjs';
+import {polishReviews,cardRating,productRating} from './rating-markup.mjs';
 const demo=new URLSearchParams(location.search).get('reviews-demo')==='1';
 const reviewStyles=document.createElement('link');reviewStyles.rel='stylesheet';reviewStyles.href='/review-design.css';document.head.append(reviewStyles);
 if(demo){const update=()=>{for(const card of document.querySelectorAll('.product-card[data-stock-product="fries-salt"]')){const link=card.querySelector('.card-rating');if(link&&!link.dataset.demo){link.outerHTML=cardRating({id:'fries-salt'},true).replace('class="card-rating"','class="card-rating" data-demo="1"');}}};update();new MutationObserver(update).observe(document.querySelector('main')||document.body,{childList:true,subtree:true});}
 const product=catalogue.products.find(p=>location.pathname==='/termek/'+p.id);
 if(product&&document.querySelector('.product-page-toolbar')){
  const section=document.createElement('section');section.id='reviews';section.className='buyer-reviews';section.innerHTML='<h2>NEKED HOGY ÍZLETT?</h2><p role="status">Értékelések betöltése…</p>';document.querySelector('.related-products')?.before(section);
+ document.querySelector('.product-title-row')?.addEventListener('click',e=>{if(!e.target.closest('.product-rating-link'))return;e.preventDefault();const heading=section.querySelector('h2');heading.tabIndex=-1;heading.focus({preventScroll:true});section.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});history.replaceState(null,'','#reviews');});
  const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let rating=0,sort='recent',offset=0;
  async function load(){try{
@@ -20,6 +21,7 @@ if(product&&document.querySelector('.product-page-toolbar')){
  }
  const filter=section.querySelector('#review-filter'),sorting=section.querySelector('#review-sort');filter.value=rating;sorting.value=sort;filter.onchange=()=>{rating=filter.value;offset=0;load();};sorting.onchange=()=>{sort=sorting.value;offset=0;load();};section.querySelector('#review-next')?.addEventListener('click',()=>{offset+=10;load();});section.querySelector('#review-prev')?.addEventListener('click',()=>{offset-=10;load();});
  polishReviews(section,d,demo);
+ const summary=document.querySelector('.product-rating-link');if(summary)summary.outerHTML=productRating({...product,reviewCount:d.count,reviewAverage:d.average},demo);
  const f=section.querySelector('form');if(f){if(d.mine){f.elements.name.value=d.mine.name;f.elements.text.value=d.mine.text;f.querySelector('input[value="'+d.mine.rating+'"]').checked=true;}f.onsubmit=async e=>{e.preventDefault();const b=f.querySelector('button');b.disabled=true;try{const response=await fetch('/api/commerce/reviews?product='+encodeURIComponent(product.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating:Number(f.elements.rating.value),name:f.elements.name.value,text:f.elements.text.value})});const result=await response.json();if(!response.ok)throw Error(result.error);await load();section.querySelector('#review-status').textContent='Értékelésed mentve.';}catch(e){section.querySelector('#review-status').textContent=e.message;b.disabled=false;}};}
  }catch(e){section.querySelector('[role=status]').textContent=e.message;}}
  load();

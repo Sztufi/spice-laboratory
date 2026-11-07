@@ -161,7 +161,7 @@ function renderCart() {
   $('#cart-title').textContent = count ? `A KOSARAD (${count})` : 'A KOSARAD';
   $('#cart-footer').hidden = !count;
   if (!count) {
-    $('#cart-content').innerHTML = styleIcons(`<div class="cart-empty">${icon('bag', 60)}<h3>IDE MÉG KELL EGY KIS ÍZ.</h3><p>Még üres a kosarad. Nézz ki egy keveréket a következő kajádhoz, és tedd ide.</p><button class="secondary-button" type="button" data-action="continue">MUTASD A FŰSZEREKET ↗</button></div>`);
+    $('#cart-content').innerHTML = styleIcons(`<div class="cart-empty">${icon('bag', 60)}<h3>Sajnos ez a kosár még elég ízetlen!</h3><p>Még üres a kosarad. Nézz ki egy keveréket a következő kajádhoz, és tedd ide.</p><button class="secondary-button" type="button" data-action="continue">MUTASD A FŰSZEREKET ↗</button></div>`);
     $('#cart-footer').innerHTML = styleIcons('');
     return;
   }
